@@ -1,0 +1,116 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+  color: #ffffff;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 卡牌基础样式 */
+.card {
+  width: 5rem;
+  height: 8rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.25rem;
+  font-weight: bold;
+  color: white;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.card-red {
+  background-color: #e94560;
+}
+
+.card-yellow {
+  background-color: #f5d300;
+}
+
+.card-green {
+  background-color: #00ff88;
+}
+
+.card-blue {
+  background-color: #00d4ff;
+}
+
+.card-wild {
+  background: linear-gradient(to bottom right, #e94560, #f5d300, #00ff88);
+}
+
+/* 按钮样式 */
+.btn-primary {
+  padding: 0.75rem 1.5rem;
+  background-color: #e94560;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: #dc2646;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  background-color: #00d4ff;
+  border-radius: 0.5rem;
+  font-weight: bold;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #0891b2;
+}
+
+/* 响应式工具 */
+@media (max-width: 768px) {
+  .card {
+    width: 4rem;
+    height: 6rem;
+    font-size: 1.5rem;
+  }
+}
+
+/* 动画工具类 */
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 30px rgba(255, 255, 255, 0.6);
+  }
+}
+
+.glow-effect {
+  animation: glow 2s ease-in-out infinite;
+}
