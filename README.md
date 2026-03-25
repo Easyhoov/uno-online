@@ -7,6 +7,8 @@ Real-time multiplayer UNO card game — no server, no registration, just play.
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
 ![PeerJS](https://img.shields.io/badge/PeerJS-orange?style=flat)
 
+**English** | **[中文](./README.zh-CN.md)**
+
 ## ✨ Features
 
 - **P2P Multiplayer** — WebRTC-based, no central game server needed
