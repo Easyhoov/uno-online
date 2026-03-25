@@ -76,6 +76,7 @@ export interface PublicGameState {
   players: Array<{
     id: string;
     name: string;
+    avatar: string;
     handCount: number;
     isCurrentPlayer: boolean;
     isHost: boolean;
@@ -113,12 +114,13 @@ export class Game {
     this.deck = new Deck();
   }
 
-  addPlayer(name: string, isHost: boolean = false, explicitId?: string): Player {
+  addPlayer(name: string, isHost: boolean = false, explicitId?: string, avatar?: string): Player {
     const player = new Player({
       id: explicitId || generatePlayerId(),
       name: name || `Player ${this.players.length + 1}`,
       isHost,
-      isReady: true
+      isReady: true,
+      avatar: avatar || '😀'
     });
     this.players.push(player);
     return player;

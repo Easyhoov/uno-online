@@ -20,7 +20,9 @@ export class PeerConnectionManager {
   private onStateUpdate: ((state: any) => void) | null = null;
   private game: Game | null = null;
   private playerNames: Map<string, string> = new Map(); // peerId -> name
+  private playerAvatars: Map<string, string> = new Map(); // peerId -> avatar
   private hostName: string = '房主';
+  private hostAvatar: string = '😀';
 
   setStateCallback(callback: (state: any) => void) {
     this.onStateUpdate = callback;
@@ -29,11 +31,12 @@ export class PeerConnectionManager {
   /**
    * 初始化 Peer（房主模式）
    */
-  async initializeAsHost(roomId: string, hostName: string): Promise<string> {
+  async initializeAsHost(roomId: string, hostName: string, hostAvatar: string = '😀'): Promise<string> {
     return new Promise((resolve, reject) => {
       const peerId = `uno-${roomId}`;
       this.isHostMode = true;
       this.hostName = hostName || '房主';
+      this.hostAvatar = hostAvatar || '😀';
 
       this.peer = new Peer(peerId, {
         debug: 1,
@@ -49,8 +52,9 @@ export class PeerConnectionManager {
         console.log('[Host] Peer ID:', id);
         this.myPeerId = id;
         this.playerNames.set('host', this.hostName);
+        this.playerAvatars.set('host', this.hostAvatar);
         this.updateState({
-          room: { roomId, isHost: true, isConnected: true, players: [{ id: 'host', name: this.hostName, isHost: true, isReady: true }] }
+          room: { roomId, isHost: true, isConnected: true, players: [{ id: 'host', name: this.hostName, avatar: this.hostAvatar, isHost: true, isReady: true }] }
         });
         resolve(id);
       });
@@ -69,7 +73,7 @@ export class PeerConnectionManager {
   /**
    * 初始化 Peer（客户端模式）
    */
-  async initializeAsClient(hostPeerId: string, playerName: string, roomId: string): Promise<string> {
+  async initializeAsClient(hostPeerId: string, playerName: string, roomId: string, playerAvatar: string = '😀'): Promise<string> {
     return new Promise((resolve, reject) => {
       this.isHostMode = false;
 
@@ -89,7 +93,7 @@ export class PeerConnectionManager {
 
         const conn = this.peer!.connect(hostPeerId, {
           reliable: true,
-          metadata: { playerName, roomId }
+          metadata: { playerName, roomId, playerAvatar }
         });
 
         conn.on('open', () => {
@@ -134,12 +138,14 @@ export class PeerConnectionManager {
    */
   private setupHostConnection(conn: DataConnection) {
     const playerName = conn.metadata?.playerName || 'Player';
+    const playerAvatar = conn.metadata?.playerAvatar || '😀';
     const clientPeerId = conn.peer;
 
     conn.on('open', () => {
-      console.log('[Host] New player:', clientPeerId, playerName);
+      console.log('[Host] New player:', clientPeerId, playerName, playerAvatar);
       this.connections.set(clientPeerId, conn);
       this.playerNames.set(clientPeerId, playerName);
+      this.playerAvatars.set(clientPeerId, playerAvatar);
 
       const players = this.buildPlayerList();
 
@@ -154,7 +160,7 @@ export class PeerConnectionManager {
       this.broadcastToClients({
         type: 'PLAYER_JOINED',
         timestamp: Date.now(),
-        player: { id: clientPeerId, name: playerName, isHost: false },
+        player: { id: clientPeerId, name: playerName, avatar: playerAvatar, isHost: false },
         players
       }, clientPeerId);
 
@@ -186,10 +192,11 @@ export class PeerConnectionManager {
    */
   private buildPlayerList() {
     return [
-      { id: 'host', name: this.playerNames.get('host') || this.hostName, isHost: true, isReady: true },
+      { id: 'host', name: this.playerNames.get('host') || this.hostName, avatar: this.playerAvatars.get('host') || this.hostAvatar, isHost: true, isReady: true },
       ...Array.from(this.connections.keys()).map(peerId => ({
         id: peerId,
         name: this.playerNames.get(peerId) || 'Player',
+        avatar: this.playerAvatars.get(peerId) || '😀',
         isHost: false,
         isReady: true
       }))
@@ -219,13 +226,14 @@ export class PeerConnectionManager {
     console.log('[Host] Starting game...');
     this.game = new Game();
 
-    // 添加房主
-    this.game.addPlayer(this.hostName, true, 'host');
+    // 添加房主（带头像）
+    this.game.addPlayer(this.hostName, true, 'host', this.hostAvatar);
 
-    // 添加所有客户端，使用他们的 peerId 作为游戏内 ID
+    // 添加所有客户端，使用他们的 peerId 作为游戏内 ID（带头像）
     for (const [peerId] of this.connections) {
       const name = this.playerNames.get(peerId) || 'Player';
-      this.game.addPlayer(name, false, peerId);
+      const avatar = this.playerAvatars.get(peerId) || '😀';
+      this.game.addPlayer(name, false, peerId, avatar);
     }
 
     this.game.startGame();

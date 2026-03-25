@@ -9,6 +9,7 @@ export interface PlayerData {
   name: string;
   isHost: boolean;
   isReady: boolean;
+  avatar?: string;
 }
 
 /**
@@ -18,6 +19,7 @@ export class Player {
   public readonly id: string;
   public readonly name: string;
   public readonly isHost: boolean;
+  public readonly avatar: string;
   public isReady: boolean;
   private hand: Card[] = [];
   public hasCalledUno: boolean = false;
@@ -27,6 +29,7 @@ export class Player {
     this.name = data.name;
     this.isHost = data.isHost;
     this.isReady = data.isReady;
+    this.avatar = data.avatar || '😀';
   }
 
   /**
@@ -115,6 +118,7 @@ export class Player {
     return {
       id: this.id,
       name: this.name,
+      avatar: this.avatar,
       handCount: this.hand.length,
       isCurrentPlayer,
       isHost: this.isHost

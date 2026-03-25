@@ -90,6 +90,7 @@ export const GameTable: React.FC = () => {
   const { gameState, myHand, room, showColorPicker, setShowColorPicker } = useGameStore();
   const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null);
   const [eventLog, setEventLog] = useState<string[]>([]);
+  const [showLog, setShowLog] = useState(true);
   const logRef = useRef<HTMLDivElement>(null);
 
   // 监听 gameState 变化，更新事件日志
@@ -233,6 +234,32 @@ export const GameTable: React.FC = () => {
       <div style={{ flex: 1, display: 'flex', gap: '0.5rem', padding: '0.5rem' }}>
         {/* 左侧：游戏区 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.25rem' }}>
+          {/* 日志切换按钮（移动端友好） */}
+          <button
+            onClick={() => setShowLog(!showLog)}
+            style={{
+              position: 'absolute',
+              top: '3.5rem',
+              right: '1rem',
+              padding: '0.4rem 0.75rem',
+              background: showLog ? 'rgba(22, 33, 62, 0.9)' : 'rgba(233, 69, 96, 0.9)',
+              borderRadius: '0.5rem',
+              border: '1px solid #374151',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              transition: 'all 0.2s',
+            }}
+            title={showLog ? '隐藏日志' : '显示日志'}
+          >
+            {showLog ? '📜 隐藏日志' : '📜 查看日志'}
+          </button>
           {/* 其他玩家 */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
             {otherPlayers.map(player => <OpponentView key={player.id} player={player} />)}
@@ -321,26 +348,28 @@ export const GameTable: React.FC = () => {
           </div>
         </div>
 
-        {/* 右侧：事件日志 */}
-        <div style={{
-          width: '14rem', flexShrink: 0,
-          background: 'rgba(22, 33, 62, 0.6)', borderRadius: '0.75rem',
-          display: 'flex', flexDirection: 'column', overflow: 'hidden'
-        }}>
-          <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #374151', fontSize: '0.8rem', fontWeight: 'bold', color: '#9ca3af' }}>
-            📜 游戏日志
-          </div>
-          <div ref={logRef} style={{
-            flex: 1, overflowY: 'auto', padding: '0.5rem 0.75rem',
-            display: 'flex', flexDirection: 'column', gap: '0.25rem',
-            fontSize: '0.7rem', color: '#d1d5db'
+        {/* 右侧：事件日志（可切换显示/隐藏） */}
+        {showLog && (
+          <div style={{
+            width: '14rem', flexShrink: 0,
+            background: 'rgba(22, 33, 62, 0.6)', borderRadius: '0.75rem',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden'
           }}>
-            {eventLog.length === 0 && <div style={{ color: '#6b7280' }}>游戏开始...</div>}
-            {eventLog.map((entry, i) => (
-              <div key={i} style={{ lineHeight: 1.4 }}>{entry}</div>
-            ))}
+            <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #374151', fontSize: '0.8rem', fontWeight: 'bold', color: '#9ca3af' }}>
+              📜 游戏日志
+            </div>
+            <div ref={logRef} style={{
+              flex: 1, overflowY: 'auto', padding: '0.5rem 0.75rem',
+              display: 'flex', flexDirection: 'column', gap: '0.25rem',
+              fontSize: '0.7rem', color: '#d1d5db'
+            }}>
+              {eventLog.length === 0 && <div style={{ color: '#6b7280' }}>游戏开始...</div>}
+              {eventLog.map((entry, i) => (
+                <div key={i} style={{ lineHeight: 1.4 }}>{entry}</div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 颜色选择器 */}
@@ -364,8 +393,8 @@ const OpponentView: React.FC<{ player: any }> = ({ player }) => (
       width: '2.5rem', height: '2.5rem', borderRadius: '50%',
       background: 'linear-gradient(135deg, #a855f7, #ec4899)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '1rem', marginBottom: '0.375rem'
-    }}>👤</div>
+      fontSize: '1.25rem', marginBottom: '0.375rem'
+    }}>{player.avatar || '😀'}</div>
     <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'white', marginBottom: '0.125rem' }}>
       {player.name} {player.isHost ? '👑' : ''}
     </div>

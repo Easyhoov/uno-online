@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { peerManager } from '../p2p/peerConnection';
+import { AvatarPicker, DEFAULT_AVATAR } from './AvatarPicker';
 
 /**
  * 大厅组件 - 创建/加入房间
@@ -8,6 +9,7 @@ import { peerManager } from '../p2p/peerConnection';
 export const Lobby: React.FC = () => {
   const [roomId, setRoomId] = useState('');
   const [playerName, setPlayerName] = useState('');
+  const [playerAvatar, setPlayerAvatar] = useState(DEFAULT_AVATAR);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +42,7 @@ export const Lobby: React.FC = () => {
     setError('');
     try {
       const newRoomId = generateRoomId();
-      await peerManager.initializeAsHost(newRoomId, playerName.trim());
+      await peerManager.initializeAsHost(newRoomId, playerName.trim(), playerAvatar);
     } catch (err: any) {
       setError(`创建失败：${err.message}`);
     } finally {
@@ -55,7 +57,7 @@ export const Lobby: React.FC = () => {
     setError('');
     try {
       const hostPeerId = `uno-${roomId.toUpperCase()}`;
-      await peerManager.initializeAsClient(hostPeerId, playerName.trim(), roomId.toUpperCase());
+      await peerManager.initializeAsClient(hostPeerId, playerName.trim(), roomId.toUpperCase(), playerAvatar);
     } catch (err: any) {
       setError(`加入失败：${err.message}`);
     } finally {
@@ -134,8 +136,9 @@ export const Lobby: React.FC = () => {
                 <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>等待玩家加入... ({room.players.length}/4)</p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   {room.players.map((player, i) => (
-                    <div key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white' }}>
-                      {player.name} {player.isHost && '👑'}
+                    <div key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>{player.avatar || '😀'}</span>
+                      <span>{player.name} {player.isHost && '👑'}</span>
                     </div>
                   ))}
                 </div>
@@ -167,19 +170,26 @@ export const Lobby: React.FC = () => {
           ) : (
             /* 创建/加入 */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* 昵称输入 */}
-              <input
-                type="text"
-                placeholder="输入你的昵称"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                style={{
-                  width: '100%', padding: '0.75rem 1rem', background: '#1a1a2e',
-                  borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
-                  outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
-                }}
-                maxLength={20}
-              />
+              {/* 昵称和头像 */}
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                {/* 头像选择 */}
+                <AvatarPicker selectedAvatar={playerAvatar} onSelect={setPlayerAvatar} />
+                
+                {/* 昵称输入 */}
+                <input
+                  type="text"
+                  placeholder="输入你的昵称"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1rem', background: '#1a1a2e',
+                    borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
+                    outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
+                  }}
+                  maxLength={20}
+                />
+              </div>
 
               <button
                 onClick={handleCreateRoom}
