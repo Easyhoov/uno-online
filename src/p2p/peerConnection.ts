@@ -3,6 +3,7 @@ import type { DataConnection } from 'peerjs';
 import type { Message, JoinAckMessage } from './messages';
 import { createMessage } from './messages';
 import { Game } from '../game/Game';
+import { useGameStore } from '../store/gameStore';
 
 /**
  * P2P 连接管理器
@@ -32,9 +33,52 @@ export class PeerConnectionManager {
   // 速率限制：防止恶意高频请求
   private playerActionTimes: Map<string, number[]> = new Map(); // playerId -> 最近动作时间戳
   private readonly MAX_ACTIONS_PER_SECOND = 5; // 每秒最多 5 个动作
+  
+  // 错误码到用户友好消息的映射
+  private readonly ERROR_MESSAGES: Record<string, string> = {
+    'PLAYER_NOT_FOUND': '玩家未找到',
+    'GAME_OVER': '游戏已结束',
+    'NOT_YOUR_TURN': '还不是你的回合',
+    'INVALID_CARD_INDEX': '无效的卡牌索引',
+    'INVALID_CARD': '无效的卡牌',
+    'MUST_DECLARE_COLOR': '万能牌必须声明颜色',
+    'INVALID_ACTION': '无效的动作',
+    'ALREADY_DRAWN': '本回合已抽过牌',
+    'MUST_DRAW_FIRST': '必须先抽牌才能跳过',
+    'NO_PENDING_CHALLENGE': '没有待处理的挑战',
+    'TARGET_NOT_FOUND': '目标玩家未找到',
+    'RATE_LIMIT_EXCEEDED': '操作过于频繁，请稍后再试',
+    'NETWORK_ERROR': '网络连接错误',
+    'PEER_CONNECTION_FAILED': '无法连接到游戏房间',
+    'UNKNOWN': '发生未知错误'
+  };
+  
+  // 重连相关
+  private reconnectAttempts: number = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 3;
+  private hostPeerIdForReconnect: string | null = null; // 保存房主 ID 用于重连
+  private playerNameForReconnect: string | null = null; // 保存玩家名称用于重连
+  private roomIdForReconnect: string | null = null; // 保存房间 ID 用于重连
+  private playerAvatarForReconnect: string | null = null; // 保存头像用于重连
 
   setStateCallback(callback: (state: any) => void) {
     this.onStateUpdate = callback;
+  }
+  
+  /**
+   * 获取用户友好的错误消息
+   */
+  private getFriendlyErrorMessage(code: string): string {
+    return this.ERROR_MESSAGES[code] || this.ERROR_MESSAGES['UNKNOWN'];
+  }
+  
+  /**
+   * 添加错误到 Store
+   */
+  private addError(code: string, customMessage?: string) {
+    const store = useGameStore.getState();
+    const message = customMessage || this.getFriendlyErrorMessage(code);
+    store.addError(code, message);
   }
 
   /**
@@ -90,6 +134,7 @@ export class PeerConnectionManager {
 
       this.peer.on('error', (err) => {
         console.error('[Host] Peer error:', err);
+        this.addError('PEER_CONNECTION_FAILED', `房主模式启动失败：${err.message || err.type}`);
         reject(err);
       });
     });
@@ -101,6 +146,12 @@ export class PeerConnectionManager {
   async initializeAsClient(hostPeerId: string, playerName: string, roomId: string, playerAvatar: string = '😀'): Promise<string> {
     return new Promise((resolve, reject) => {
       this.isHostMode = false;
+      
+      // 保存重连所需信息
+      this.hostPeerIdForReconnect = hostPeerId;
+      this.playerNameForReconnect = playerName;
+      this.roomIdForReconnect = roomId;
+      this.playerAvatarForReconnect = playerAvatar;
 
       this.peer = new Peer(undefined as any, {
         debug: 1,
@@ -124,6 +175,7 @@ export class PeerConnectionManager {
         conn.on('open', () => {
           console.log('[Client] Connected to host');
           this.connections.set('host', conn);
+          this.reconnectAttempts = 0; // 连接成功，重置重连计数
           this.updateState({
             room: { roomId, isHost: false, isConnected: true }
           });
@@ -141,16 +193,22 @@ export class PeerConnectionManager {
         conn.on('close', () => {
           console.log('[Client] Disconnected from host');
           this.updateState({ room: { isConnected: false } });
+          this.addError('NETWORK_ERROR', '与房主失去连接，尝试重新连接...');
+          
+          // 自动尝试重连
+          this.attemptReconnect();
         });
 
         conn.on('error', (err) => {
           console.error('[Client] Connection error:', err);
+          this.addError('NETWORK_ERROR', `连接错误：${err.message || err.type}`);
           reject(err);
         });
       });
 
       this.peer.on('error', (err) => {
         console.error('[Client] Peer error:', err);
+        this.addError('PEER_CONNECTION_FAILED', `无法连接到房间：${err.message || err.type}`);
         reject(err);
       });
     });
@@ -164,6 +222,46 @@ export class PeerConnectionManager {
       if (this.isHostMode || !this.connections.has('host')) return;
       this.send({ type: 'KEEPALIVE', timestamp: Date.now(), playerId: this.myPeerId! });
     }, 5000);
+  }
+  
+  /**
+   * 尝试重新连接（客户端）
+   */
+  private async attemptReconnect() {
+    if (!this.hostPeerIdForReconnect || !this.roomIdForReconnect) {
+      console.log('[Client] Cannot reconnect: missing host/room info');
+      return;
+    }
+    
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      this.addError('NETWORK_ERROR', '重连失败次数过多，请检查网络连接');
+      this.reconnectAttempts = 0;
+      return;
+    }
+    
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000); // 指数退避，最多 10 秒
+    
+    console.log(`[Client] Attempting reconnect ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
+    
+    setTimeout(async () => {
+      if (this.isHostMode || !this.myPeerId) return;
+      
+      try {
+        // 发送重连请求
+        this.send({
+          type: 'RECONNECT_REQUEST',
+          timestamp: Date.now(),
+          playerId: this.myPeerId!,
+          roomId: this.roomIdForReconnect!,
+          playerName: this.playerNameForReconnect!
+        });
+        console.log('[Client] Reconnect request sent');
+      } catch (err) {
+        console.error('[Client] Reconnect failed:', err);
+        this.attemptReconnect(); // 继续尝试
+      }
+    }, delay);
   }
 
   private updateState(state: any) {
@@ -649,7 +747,9 @@ export class PeerConnectionManager {
         break;
 
       case 'ERROR':
-        console.error('[Client] Error:', (data as any).message);
+        const errorData: any = data;
+        console.error('[Client] Error:', errorData.message);
+        this.addError(errorData.code || 'UNKNOWN', errorData.message);
         break;
 
       case 'KICKED':

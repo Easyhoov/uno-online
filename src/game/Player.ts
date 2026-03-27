@@ -1,5 +1,6 @@
 import type { Card } from './Card';
 import { Deck } from './Deck';
+import { generatePlayerId as genPlayerId, generatePlayerName as genName } from '../utils/idGenerator';
 
 /**
  * 玩家接口
@@ -127,20 +128,15 @@ export class Player {
 }
 
 /**
- * 生成玩家 ID
+ * 生成玩家 ID（统一使用 idGenerator）
  */
 export function generatePlayerId(): string {
-  return `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return genPlayerId();
 }
 
 /**
- * 生成随机玩家名称
+ * 生成随机玩家名称（统一使用 idGenerator）
  */
 export function generatePlayerName(): string {
-  const adjectives = ['勇敢的', '聪明的', '快乐的', '幸运的', '神秘的', '无敌的', '闪电', '火焰'];
-  const nouns = ['玩家', '战士', '法师', '骑士', '猎人', '忍者', '侠客', '王者'];
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  const num = Math.floor(Math.random() * 100);
-  return `${adj}${noun}${num}`;
+  return genName();
 }

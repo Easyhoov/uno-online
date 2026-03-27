@@ -1,4 +1,5 @@
 import { CardColor, CardType } from './enums';
+import { generateCardId as genId } from '../utils/idGenerator';
 
 // 重新导出枚举
 export { CardColor, CardType };
@@ -18,7 +19,7 @@ export interface Card {
  * 生成卡牌唯一 ID
  */
 export function generateCardId(): string {
-  return `card_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return genId();
 }
 
 /**
