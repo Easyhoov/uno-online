@@ -80,14 +80,18 @@ describe('Game', () => {
         c.color === state.wildColor || c.color === state.topCard.color
       );
 
-      if (matchingCardIndex !== -1) {
-        const result = game.processAction({
-          type: 'PLAY_CARD',
-          playerId: player.id,
-          cardIndex: matchingCardIndex
-        });
-        expect(result.valid).toBe(true);
+      // 如果没有找到匹配的牌，测试应该跳过而不是失败
+      if (matchingCardIndex === -1) {
+        // 这是可能的，因为手牌可能真的没有匹配的颜色
+        return;
       }
+      
+      const result = game.processAction({
+        type: 'PLAY_CARD',
+        playerId: player.id,
+        cardIndex: matchingCardIndex
+      });
+      expect(result.valid).toBe(true);
     });
 
     it('应该允许出数字匹配的牌', () => {
@@ -131,7 +135,8 @@ describe('Game', () => {
     });
 
     it('应该拒绝无效的牌', () => {
-      const player = game.players[0];
+      // 使用当前玩家，而不是固定的 players[0]
+      const player = game.players[game.currentPlayerIndex];
       
       const result = game.processAction({
         type: 'PLAY_CARD',
