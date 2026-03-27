@@ -465,10 +465,23 @@ export class Game {
 
   private nextTurn() {
     this.hasDrawnThisTurn = false;
-    let nextIndex = this.currentPlayerIndex + this.direction;
-    if (nextIndex < 0) nextIndex = this.players.length - 1;
-    else if (nextIndex >= this.players.length) nextIndex = 0;
-    this.currentPlayerIndex = nextIndex;
+    
+    // 跳过 spectator 玩家，找到下一个活跃玩家
+    let attempts = 0;
+    do {
+      let nextIndex = this.currentPlayerIndex + this.direction;
+      if (nextIndex < 0) nextIndex = this.players.length - 1;
+      else if (nextIndex >= this.players.length) nextIndex = 0;
+      this.currentPlayerIndex = nextIndex;
+      attempts++;
+      
+      // 防止无限循环（所有玩家都是 spectator）
+      if (attempts >= this.players.length) {
+        console.warn('[Game] All players are spectators, resetting to first player');
+        this.currentPlayerIndex = 0;
+        break;
+      }
+    } while (this.players[this.currentPlayerIndex].status === 'spectator');
   }
 
   private getCurrentPlayerId(): string {

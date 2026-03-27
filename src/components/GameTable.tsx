@@ -104,6 +104,9 @@ export const GameTable: React.FC = () => {
   const animCounterRef = useRef(0); // 动画计数器 ref（避免触发重渲染）
   const logRef = useRef<HTMLDivElement>(null);
   const handRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  
+  // 提前声明 myId，避免在 useEffect 中访问未声明的变量
+  const myId = peerManager.getMyPeerId();
 
   // 注入 CSS 动画
   useEffect(() => {
@@ -136,7 +139,7 @@ export const GameTable: React.FC = () => {
         }, 600);
       }
     }
-  }, [gameState?.lastEvents]);
+  }, [gameState?.lastEvents, myId, myHand]);
 
   // 监听抽牌事件，播放动画
   useEffect(() => {
@@ -152,7 +155,7 @@ export const GameTable: React.FC = () => {
         }, 600);
       }
     }
-  }, [gameState?.lastEvents]);
+  }, [gameState?.lastEvents, myId, myHand]);
 
   // 监听 gameState 变化，更新事件日志
   useEffect(() => {
@@ -182,7 +185,6 @@ export const GameTable: React.FC = () => {
     );
   }
 
-  const myId = peerManager.getMyPeerId();
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurnNow = currentPlayer?.id === myId;
   const hasDrawnThisTurn = gameState.hasDrawnThisTurn;

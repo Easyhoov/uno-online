@@ -70,7 +70,8 @@ describe('Game', () => {
     });
 
     it('应该允许出颜色匹配的牌', () => {
-      const player = game.players[0];
+      // 获取当前玩家（可能是 Alice 或 Bob，取决于第一张牌的效果）
+      const player = game.players[game.currentPlayerIndex];
       const hand = game.getPlayerHand(player.id)!;
       
       // 找到与顶牌颜色相同的牌
@@ -142,7 +143,8 @@ describe('Game', () => {
     });
 
     it('万能牌必须声明颜色', () => {
-      const player = game.players[0];
+      // 获取当前玩家
+      const player = game.players[game.currentPlayerIndex];
       const hand = game.getPlayerHand(player.id)!;
       const wildCardIndex = hand.findIndex(c => c.color === CardColor.WILD);
 

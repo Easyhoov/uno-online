@@ -771,6 +771,15 @@ export class PeerConnectionManager {
 
   /**
    * 房主转移（给下一个玩家）
+   * 
+   * ⚠️ 注意：当前实现是简化的版本
+   * 完整实现需要：
+   * 1. 新房主使用新房间 ID 重新初始化 Peer
+   * 2. 所有客户端收到通知后重新连接到新房主
+   * 3. 同步游戏状态
+   * 
+   * 当前版本：游戏继续，但客户端仍然连接到旧房主（已断开）
+   * 建议：房主主动离开前手动转移，或使用专用服务器
    */
   transferHost() {
     if (!this.isHostMode || this.connections.size === 0) return;
@@ -790,7 +799,9 @@ export class PeerConnectionManager {
       timestamp: Date.now(),
       newHostId,
       newHostName,
-      serializedGame
+      serializedGame,
+      // 传递新房主的 Peer ID（客户端需要重新连接）
+      newHostPeerId: newHostId
     });
 
     // 清理当前房主状态
@@ -916,7 +927,10 @@ export class PeerConnectionManager {
             console.log('[New Host] Game restored successfully');
           }
           
+          // 重要：新房主需要重新初始化 Peer 来监听其他客户端
+          // 注意：这是一个简化实现，完整实现需要所有客户端重新连接到新房主
           console.log('[New Host] Taking over game, connections:', this.connections.size);
+          console.log('[New Host] Note: Clients need to reconnect to new host for full functionality');
         }
         break;
 
