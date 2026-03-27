@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import { CardComponent } from './CardComponent';
 import { ColorPicker } from './ColorPicker';
@@ -6,6 +7,14 @@ import { CardColor, CardType } from '../game/enums';
 import { peerManager } from '../p2p/peerConnection';
 import type { Card } from '../game/Card';
 import type { GameEvent } from '../game/Game';
+
+// 添加 CSS 动画样式
+const challengeAnimation = `
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+`;
 
 // 手牌排序：按颜色分组，颜色内按数字排序
 const COLOR_ORDER: Record<string, number> = { red: 0, yellow: 1, green: 2, blue: 3, wild: 4 };
@@ -91,7 +100,74 @@ export const GameTable: React.FC = () => {
   const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null);
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showLog, setShowLog] = useState(true);
+  const [playingCards, setPlayingCards] = useState<Array<{ card: Card; id: string; fromX: number }>>([]);
   const logRef = useRef<HTMLDivElement>(null);
+  const handRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  // 注入 CSS 动画
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = challengeAnimation;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  // 监听出牌事件，播放动画
+  useEffect(() => {
+    if (gameState?.lastEvents?.length) {
+      const playEvent = gameState.lastEvents.find(e => e.type === 'CARD_PLAYED');
+      if (playEvent && playEvent.card && playEvent.playerId === myId) {
+        // 获取卡牌位置
+        const cardIndex = myHand?.findIndex(c => c.id === playEvent.card!.id) || 0;
+        const cardElement = handRefs.current.get(cardIndex);
+        const fromX = cardElement ? cardElement.getBoundingClientRect().left : 0;
+        
+        // 添加动画卡牌
+        const animId = `anim_${Date.now()}`;
+        setPlayingCards(prev => [...prev, { card: playEvent.card!, id: animId, fromX }]);
+        
+        // 动画结束后移除
+        setTimeout(() => {
+          setPlayingCards(prev => prev.filter(c => c.id !== animId));
+        }, 600);
+      }
+    }
+  }, [gameState?.lastEvents]);
+
+  // 监听出牌事件，播放动画
+  useEffect(() => {
+    if (gameState?.lastEvents?.length) {
+      const playEvent = gameState.lastEvents.find(e => e.type === 'CARD_PLAYED');
+      if (playEvent && playEvent.card && playEvent.playerId === myId) {
+        // 获取卡牌位置
+        const cardIndex = myHand?.findIndex(c => c.id === playEvent.card!.id) || 0;
+        const cardElement = handRefs.current.get(cardIndex);
+        const fromX = cardElement ? cardElement.getBoundingClientRect().left : 0;
+        
+        // 添加动画卡牌
+        const animId = `anim_${Date.now()}`;
+        setPlayingCards(prev => [...prev, { card: playEvent.card!, id: animId, fromX }]);
+        
+        // 动画结束后移除
+        setTimeout(() => {
+          setPlayingCards(prev => prev.filter(c => c.id !== animId));
+        }, 600);
+      }
+      
+      // 监听抽牌事件
+      const drawEvent = gameState.lastEvents.find(e => e.type === 'CARD_DRAWN');
+      if (drawEvent && drawEvent.playerId === myId) {
+        // 抽牌动画：从牌堆飞向手牌
+        const animId = `draw_anim_${Date.now()}`;
+        setPlayingCards(prev => [...prev, { card: drawEvent.card || myHand![0], id: animId, fromX: -200 }]);
+        setTimeout(() => {
+          setPlayingCards(prev => prev.filter(c => c.id !== animId));
+        }, 600);
+      }
+    }
+  }, [gameState?.lastEvents]);
 
   // 监听 gameState 变化，更新事件日志
   useEffect(() => {
@@ -167,6 +243,13 @@ export const GameTable: React.FC = () => {
 
   const handleCallUno = () => {
     const action = { type: 'CALL_UNO' as const, playerId: myId! };
+    if (room.isHost) peerManager.hostAction(action);
+    else peerManager.send({ type: 'ACTION', timestamp: Date.now(), action });
+  };
+
+  const handleChallenge = () => {
+    if (!gameState.canChallenge) return;
+    const action = { type: 'CHALLENGE_WILD_FOUR' as const, playerId: myId!, targetPlayerId: gameState.challengeTarget };
     if (room.isHost) peerManager.hostAction(action);
     else peerManager.send({ type: 'ACTION', timestamp: Date.now(), action });
   };
@@ -327,24 +410,85 @@ export const GameTable: React.FC = () => {
             </div>
           )}
 
+          {/* +4 挑战按钮（非回合） */}
+          {gameState.canChallenge && !isMyTurnNow && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+              <button onClick={handleChallenge} style={{
+                padding: '0.75rem 1.5rem',
+                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                borderRadius: '2rem',
+                border: 'none',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                boxShadow: '0 0 15px rgba(239, 68, 68, 0.4)',
+                animation: 'pulse 1.5s infinite'
+              }}>
+                ⚠️ 挑战 +4（质疑作弊）
+              </button>
+            </div>
+          )}
+
           {/* 手牌 */}
-          <div style={{ width: '100%', maxWidth: '72rem' }}>
+          <div style={{ width: '100%', maxWidth: '72rem', position: 'relative' }}>
             <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '0.8rem', color: '#9ca3af' }}>你的手牌（{myHand?.length || 0}）</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '0.2rem', flexWrap: 'wrap', padding: '0 0.5rem' }}>
-              {sortedHand.map(({ card, originalIndex }) => {
+              {sortedHand.map(({ card, originalIndex }, idx) => {
                 const playable = isMyTurnNow && isValidPlay(card, gameState.topCard, gameState.wildColor, gameState.drawStack);
                 return (
-                  <CardComponent
+                  <div
                     key={card.id || originalIndex}
-                    card={card}
-                    isPlayable={playable}
-                    onClick={() => handleCardClick(originalIndex)}
-                  />
+                    ref={el => {
+                      if (el) handRefs.current.set(idx, el);
+                      else handRefs.current.delete(idx);
+                    }}
+                  >
+                    <CardComponent
+                      card={card}
+                      isPlayable={playable}
+                      onClick={() => handleCardClick(originalIndex)}
+                    />
+                  </div>
                 );
               })}
             </div>
+
+            {/* 出牌动画 */}
+            <AnimatePresence>
+              {playingCards.map(({ card, id, fromX }) => (
+                <motion.div
+                  key={id}
+                  initial={{ 
+                    x: fromX - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0) + 100,
+                    y: 200,
+                    scale: 1,
+                    opacity: 1,
+                    rotate: 0
+                  }}
+                  animate={{ 
+                    x: 0,
+                    y: -150,
+                    scale: 0.6,
+                    opacity: 0,
+                    rotate: 180
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    pointerEvents: 'none',
+                    zIndex: 1000
+                  }}
+                >
+                  <CardComponent card={card} isPlayable={false} onClick={() => {}} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -381,29 +525,68 @@ export const GameTable: React.FC = () => {
 /**
  * 对手视角
  */
-const OpponentView: React.FC<{ player: any }> = ({ player }) => (
-  <div style={{
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    padding: '0.5rem 1rem', borderRadius: '0.625rem',
-    background: player.isCurrentPlayer ? 'rgba(74, 222, 128, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-    border: player.isCurrentPlayer ? '1px solid rgba(74, 222, 128, 0.25)' : '1px solid transparent',
-    transition: 'all 0.3s', minWidth: '5rem'
-  }}>
+const OpponentView: React.FC<{ player: any }> = ({ player }) => {
+  const { room } = useGameStore();
+  
+  const handleKick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (room.isHost && confirm(`确定要踢出玩家 "${player.name}" 吗？`)) {
+      peerManager.kickPlayer(player.id, '房主将你踢出房间');
+    }
+  };
+
+  return (
     <div style={{
-      width: '2.5rem', height: '2.5rem', borderRadius: '50%',
-      background: 'linear-gradient(135deg, #a855f7, #ec4899)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '1.25rem', marginBottom: '0.375rem'
-    }}>{player.avatar || '😀'}</div>
-    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'white', marginBottom: '0.125rem' }}>
-      {player.name} {player.isHost ? '👑' : ''}
-    </div>
-    <div style={{
-      padding: '0.1rem 0.4rem', background: '#1a1a2e', borderRadius: '1rem',
-      fontSize: '0.7rem', color: player.handCount <= 2 ? '#f87171' : '#9ca3af'
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '0.5rem 1rem', borderRadius: '0.625rem',
+      background: player.isCurrentPlayer ? 'rgba(74, 222, 128, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+      border: player.isCurrentPlayer ? '1px solid rgba(74, 222, 128, 0.25)' : '1px solid transparent',
+      transition: 'all 0.3s', minWidth: '5rem', position: 'relative'
     }}>
-      {player.handCount} 张
+      <div style={{
+        width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+        background: 'linear-gradient(135deg, #a855f7, #ec4899)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.25rem', marginBottom: '0.375rem'
+      }}>{player.avatar || '😀'}</div>
+      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'white', marginBottom: '0.125rem' }}>
+        {player.name} {player.isHost ? '👑' : ''}
+      </div>
+      <div style={{
+        padding: '0.1rem 0.4rem', background: '#1a1a2e', borderRadius: '1rem',
+        fontSize: '0.7rem', color: player.handCount <= 2 ? '#f87171' : '#9ca3af'
+      }}>
+        {player.handCount} 张
+      </div>
+      {player.isCurrentPlayer && <div style={{ marginTop: '0.2rem', fontSize: '0.6rem', color: '#4ade80' }}>出牌中</div>}
+      
+      {/* 房主踢人按钮 */}
+      {room.isHost && !player.isHost && (
+        <button
+          onClick={handleKick}
+          style={{
+            position: 'absolute',
+            top: '-0.25rem',
+            right: '-0.25rem',
+            width: '1.25rem',
+            height: '1.25rem',
+            borderRadius: '50%',
+            background: '#ef4444',
+            border: 'none',
+            color: 'white',
+            fontSize: '0.7rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}
+          title="踢出玩家"
+        >
+          ✕
+        </button>
+      )}
     </div>
-    {player.isCurrentPlayer && <div style={{ marginTop: '0.2rem', fontSize: '0.6rem', color: '#4ade80' }}>出牌中</div>}
-  </div>
-);
+  );
+};

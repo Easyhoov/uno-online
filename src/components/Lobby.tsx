@@ -101,7 +101,35 @@ export const Lobby: React.FC = () => {
       setError('至少需要 2 名玩家');
       return;
     }
+    // 检查所有玩家是否都准备好了
+    const allReady = room.players.every(p => (p as any).isReady !== false);
+    if (!allReady) {
+      setError('有玩家还没准备好，等待所有玩家准备就绪后再开始');
+      return;
+    }
     peerManager.startGame();
+  };
+
+  const handleKickPlayer = (playerId: string, playerName: string) => {
+    if (!room.isHost) return;
+    if (confirm(`确定要踢出玩家 "${playerName}" 吗？`)) {
+      peerManager.kickPlayer(playerId, '房主将你踢出房间');
+    }
+  };
+
+  const handleToggleReady = () => {
+    // 切换准备状态
+    const newReady = !(room as any).myReady;
+    (room as any).myReady = newReady;
+    // 通知房主（如果是客户端）
+    if (!room.isHost) {
+      peerManager.send({ type: 'READY_CHANGE', timestamp: Date.now(), isReady: newReady });
+    }
+    // 更新 UI
+    updatePlayers(room.players.map(p => ({
+      ...p,
+      isReady: p.id === (room.isHost ? 'host' : peerManager.getMyPeerId()) ? newReady : (p as any).isReady
+    })));
   };
 
   return (
@@ -135,14 +163,69 @@ export const Lobby: React.FC = () => {
               <div style={{ marginBottom: '1.5rem' }}>
                 <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>等待玩家加入... ({room.players.length}/4)</p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {room.players.map((player, i) => (
-                    <div key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '1.25rem' }}>{player.avatar || '😀'}</span>
-                      <span>{player.name} {player.isHost && '👑'}</span>
-                    </div>
-                  ))}
+                  {room.players.map((player, i) => {
+                    const isReady = (player as any).isReady !== false;
+                    
+                    return (
+                      <div key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                        <span style={{ fontSize: '1.25rem' }}>{(player as any).avatar || '😀'}</span>
+                        <span>{player.name} {player.isHost && '👑'}</span>
+                        {/* 准备状态 */}
+                        <span style={{ 
+                          padding: '0.15rem 0.5rem', 
+                          borderRadius: '1rem', 
+                          fontSize: '0.65rem',
+                          fontWeight: 'bold',
+                          background: isReady ? 'rgba(34, 197, 94, 0.2)' : 'rgba(156, 163, 175, 0.2)',
+                          color: isReady ? '#4ade80' : '#9ca3af'
+                        }}>
+                          {isReady ? '✅ 准备' : '⏳ 未准备'}
+                        </span>
+                        {room.isHost && !player.isHost && (
+                          <button
+                            onClick={() => handleKickPlayer(player.id, player.name)}
+                            style={{
+                              marginLeft: '0.5rem',
+                              padding: '0.2rem 0.5rem',
+                              background: '#ef4444',
+                              borderRadius: '0.25rem',
+                              border: 'none',
+                              color: 'white',
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              fontWeight: 'bold'
+                            }}
+                            title="踢出玩家"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* 准备按钮（非房主） */}
+              {!room.isHost && (
+                <button
+                  onClick={handleToggleReady}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: (room as any).myReady !== false ? '#ef4444' : '#22c55e',
+                    borderRadius: '0.5rem',
+                    fontWeight: 'bold',
+                    color: 'white',
+                    border: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    fontSize: '1.125rem',
+                    marginBottom: '1rem'
+                  }}
+                >
+                  {(room as any).myReady !== false ? '✋ 取消准备' : '✅ 准备就绪'}
+                </button>
+              )}
 
               {room.isHost && (
                 <button

@@ -36,7 +36,7 @@ export function createNumberCard(color: CardColor, value: number): Card {
 /**
  * 创建功能牌
  */
-export function createActionCard(color: CardColor, type: CardType.SKIP | CardType.REVERSE | CardType.DRAW_TWO): Card {
+export function createActionCard(color: CardColor, type: CardType): Card {
   return {
     id: generateCardId(),
     color,

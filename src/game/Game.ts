@@ -90,6 +90,9 @@ export interface PublicGameState {
   isGameOver: boolean;
   lastEvents: GameEvent[];     // 最近的事件（用于 UI 展示日志）
   hasDrawnThisTurn: boolean;   // 当前玩家本回合是否已抽牌
+  canChallenge: boolean;       // 当前玩家是否可以挑战 +4
+  challengeTarget?: string;    // 被挑战的玩家 ID
+  challengeWildColor?: CardColor | null; // +4 玩家声明的颜色（用于挑战验证）
 }
 
 /**
@@ -106,7 +109,7 @@ export class Game {
 
   private deck: Deck;
   private discardPile: Card[] = [];
-  private pendingChallenge: { challengerId: string; targetId: string } | null = null;
+  private pendingChallenge: { challengerId: string; targetId: string; wildColor: CardColor | null } | null = null;
   private lastEvents: GameEvent[] = [];
   private hasDrawnThisTurn: boolean = false;
 
@@ -194,7 +197,6 @@ export class Game {
    * 处理第一张翻出牌的功能效果
    */
   private applyFirstCardEffect(card: Card) {
-    const events: GameEvent[] = [];
     switch (card.type) {
       case CardType.SKIP:
         this.nextTurn();
@@ -229,6 +231,18 @@ export class Game {
       return { valid: false, reason: 'NOT_YOUR_TURN', events: [], gameOver: false };
     }
 
+    // 输入验证：检查 cardIndex 合法性
+    if (action.type === 'PLAY_CARD') {
+      if (action.cardIndex === undefined || action.cardIndex < 0 || action.cardIndex >= player.handCount()) {
+        return { valid: false, reason: 'INVALID_CARD_INDEX', events: [], gameOver: false };
+      }
+      // 验证 declaredColor 对于万能牌是必需的
+      const card = player.getHand()[action.cardIndex];
+      if (card && card.color === CardColor.WILD && !action.declaredColor) {
+        return { valid: false, reason: 'MUST_DECLARE_COLOR', events: [], gameOver: false };
+      }
+    }
+
     switch (action.type) {
       case 'PLAY_CARD':
         return this.playCard(player, action.cardIndex!, action.declaredColor);
@@ -255,17 +269,18 @@ export class Game {
       return { valid: false, reason: 'INVALID_CARD', events: [], gameOver: false };
     }
 
-    // UNO 惩罚：剩 2 张牌要出牌时如果没喊 UNO，罚抽 2 张
-    if (player.handCount() === 2 && !player.hasCalledUno) {
-      this.ensureDeckHasCards();
-      player.drawCard(this.deck, 2);
-      events.push({ type: 'UNO_PENALTY', playerId: player.id, playerName: player.name, amount: 2 });
-    }
-
     // 出牌
     player.playCard(cardIndex);
     this.discardPile.push(card);
     events.push({ type: 'CARD_PLAYED', playerId: player.id, playerName: player.name, card });
+
+    // UNO 惩罚：出牌后剩 1 张牌但未喊 UNO，罚抽 2 张
+    const handAfterPlay = player.handCount();
+    if (handAfterPlay === 1 && !player.hasCalledUno) {
+      this.ensureDeckHasCards();
+      player.drawCard(this.deck, 2);
+      events.push({ type: 'UNO_PENALTY', playerId: player.id, playerName: player.name, amount: 2 });
+    }
 
     // 万能牌颜色
     if (card.color === CardColor.WILD) {
@@ -282,7 +297,7 @@ export class Game {
     this.hasDrawnThisTurn = false;
 
     // 处理卡牌效果（内含 nextTurn）
-    this.applyCardEffect(card, events);
+    this.applyCardEffect(card, events, player.id);
 
     // 检查胜利
     if (player.handCount() === 0) {
@@ -312,7 +327,7 @@ export class Game {
     return false;
   }
 
-  private applyCardEffect(card: Card, events: GameEvent[]) {
+  private applyCardEffect(card: Card, events: GameEvent[], playerId: string) {
     switch (card.type) {
       case CardType.SKIP:
         this.nextTurn();
@@ -341,6 +356,15 @@ export class Game {
       case CardType.WILD_DRAW_FOUR:
         this.drawStack += 4;
         events.push({ type: 'DRAW_STACK_INCREASED', amount: this.drawStack });
+        
+        // 设置挑战状态：下一个玩家可以挑战
+        const nextPlayerIndex = (this.currentPlayerIndex + this.direction + this.players.length) % this.players.length;
+        this.pendingChallenge = {
+          challengerId: this.players[nextPlayerIndex].id,
+          targetId: playerId,
+          wildColor: this.wildColor // 记录 +4 玩家声明的颜色
+        };
+        
         this.nextTurn();
         break;
 
@@ -416,14 +440,17 @@ export class Game {
 
     const events: GameEvent[] = [];
     const topCard = this.discardPile[this.discardPile.length - 1];
-    const hasValidCard = targetPlayer.hasValidPlay(topCard, null);
+    // 挑战验证：检查出 +4 的玩家当时是否有同色牌可出（使用记录的 wildColor）
+    const hasValidCard = targetPlayer.hasValidPlay(topCard, this.pendingChallenge.wildColor);
 
     if (hasValidCard) {
+      // 挑战成功：出 +4 的玩家有合法牌，罚抽 6 张
       this.ensureDeckHasCards();
       targetPlayer.drawCard(this.deck, 6);
       events.push({ type: 'CHALLENGE_SUCCESS', playerId: challenger.id, playerName: challenger.name });
       this.nextTurn();
     } else {
+      // 挑战失败：挑战者罚抽 4 张
       this.ensureDeckHasCards();
       challenger.drawCard(this.deck, 4);
       events.push({ type: 'CHALLENGE_FAILED', playerId: challenger.id, playerName: challenger.name });
@@ -452,6 +479,10 @@ export class Game {
   }
 
   getPublicState(): PublicGameState {
+    const currentPlayer = this.players[this.currentPlayerIndex];
+    const canChallenge = this.pendingChallenge !== null && 
+                         this.pendingChallenge.challengerId === currentPlayer?.id;
+    
     return {
       players: this.players.map((p, i) => p.getPublicInfo(i === this.currentPlayerIndex)),
       currentPlayerIndex: this.currentPlayerIndex,
@@ -463,6 +494,9 @@ export class Game {
       isGameOver: this.isGameOver,
       lastEvents: this.lastEvents,
       hasDrawnThisTurn: this.hasDrawnThisTurn,
+      canChallenge: canChallenge,
+      challengeTarget: this.pendingChallenge?.targetId,
+      challengeWildColor: this.pendingChallenge?.wildColor,
     };
   }
 
@@ -484,5 +518,68 @@ export class Game {
     this.pendingChallenge = null;
     this.lastEvents = [];
     this.hasDrawnThisTurn = false;
+  }
+
+  /**
+   * 序列化游戏状态（用于房主转移）
+   */
+  serialize(): string {
+    return JSON.stringify({
+      players: this.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        isHost: p.isHost,
+        isReady: p.isReady,
+        avatar: p.avatar,
+        hand: p.getHand(),
+        hasCalledUno: p.hasCalledUno
+      })),
+      currentPlayerIndex: this.currentPlayerIndex,
+      direction: this.direction,
+      drawStack: this.drawStack,
+      wildColor: this.wildColor,
+      isGameOver: this.isGameOver,
+      winnerId: this.winnerId,
+      discardPile: this.discardPile,
+      pendingChallenge: this.pendingChallenge,
+      lastEvents: this.lastEvents,
+      hasDrawnThisTurn: this.hasDrawnThisTurn
+    });
+  }
+
+  /**
+   * 反序列化游戏状态（用于房主转移）
+   */
+  static deserialize(data: string): Game {
+    const state = JSON.parse(data);
+    const game = new Game();
+    
+    // 恢复玩家
+    state.players.forEach((p: any) => {
+      const player = new Player({
+        id: p.id,
+        name: p.name,
+        isHost: p.isHost,
+        isReady: p.isReady,
+        avatar: p.avatar
+      });
+      // 恢复手牌
+      (player as any).hand = p.hand;
+      (player as any).hasCalledUno = p.hasCalledUno;
+      game.players.push(player);
+    });
+    
+    game.currentPlayerIndex = state.currentPlayerIndex;
+    game.direction = state.direction;
+    game.drawStack = state.drawStack;
+    game.wildColor = state.wildColor;
+    game.isGameOver = state.isGameOver;
+    game.winnerId = state.winnerId;
+    game.discardPile = state.discardPile;
+    game.pendingChallenge = state.pendingChallenge;
+    game.lastEvents = state.lastEvents;
+    game.hasDrawnThisTurn = state.hasDrawnThisTurn;
+    
+    return game;
   }
 }
