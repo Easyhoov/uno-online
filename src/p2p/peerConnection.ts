@@ -64,6 +64,7 @@ export class PeerConnectionManager {
   private playerNameForReconnect: string | null = null; // 保存玩家名称用于重连
   private roomIdForReconnect: string | null = null; // 保存房间 ID 用于重连
   private playerAvatarForReconnect: string | null = null; // 保存头像用于重连
+  private heartbeatInterval: any = null; // 心跳定时器 ID
 
   setStateCallback(callback: (state: any) => void) {
     this.onStateUpdate = callback;
@@ -197,6 +198,7 @@ export class PeerConnectionManager {
         conn.on('close', () => {
           console.log('[Client] Disconnected from host');
           this.updateState({ room: { isConnected: false } });
+          this.stopClientHeartbeat(); // 停止心跳
           this.addError('NETWORK_ERROR', '与房主失去连接，尝试重新连接...');
           
           // 自动尝试重连
@@ -222,10 +224,26 @@ export class PeerConnectionManager {
    * 启动心跳（客户端）
    */
   private startClientHeartbeat() {
-    setInterval(() => {
+    this.stopClientHeartbeat(); // 先停止旧的
+    
+    this.heartbeatInterval = setInterval(() => {
       if (this.isHostMode || !this.connections.has('host')) return;
-      this.send({ type: 'KEEPALIVE', timestamp: Date.now(), playerId: this.myPeerId! });
+      const conn = this.connections.get('host');
+      // 检查连接是否打开
+      if (conn && conn.open) {
+        this.send({ type: 'KEEPALIVE', timestamp: Date.now(), playerId: this.myPeerId! });
+      }
     }, 5000);
+  }
+  
+  /**
+   * 停止心跳（客户端）
+   */
+  private stopClientHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
   }
   
   /**
@@ -252,15 +270,56 @@ export class PeerConnectionManager {
       if (this.isHostMode || !this.myPeerId) return;
       
       try {
-        // 发送重连请求
-        this.send({
-          type: 'RECONNECT_REQUEST',
-          timestamp: Date.now(),
-          playerId: this.myPeerId!,
-          roomId: this.roomIdForReconnect!,
-          playerName: this.playerNameForReconnect!
+        // 清理旧连接
+        this.connections.clear();
+        this.stopClientHeartbeat();
+        
+        // 重新建立连接到房主
+        console.log('[Client] Reconnecting to host:', this.hostPeerIdForReconnect);
+        
+        const conn = this.peer!.connect(this.hostPeerIdForReconnect!, {
+          reliable: true,
+          metadata: { 
+            playerName: this.playerNameForReconnect!, 
+            roomId: this.roomIdForReconnect!, 
+            playerAvatar: this.playerAvatarForReconnect! 
+          }
         });
-        console.log('[Client] Reconnect request sent');
+        
+        conn.on('open', () => {
+          console.log('[Client] Reconnected to host');
+          this.connections.set('host', conn);
+          this.updateState({ room: { isConnected: true } });
+          this.reconnectAttempts = 0; // 重置重连计数
+          
+          // 发送重连请求
+          this.send({
+            type: 'RECONNECT_REQUEST',
+            timestamp: Date.now(),
+            playerId: this.myPeerId!,
+            roomId: this.roomIdForReconnect!,
+            playerName: this.playerNameForReconnect!
+          });
+          
+          // 重启心跳
+          this.startClientHeartbeat();
+        });
+        
+        conn.on('data', (data: any) => {
+          this.handleClientMessage(data as Message);
+        });
+        
+        conn.on('close', () => {
+          console.log('[Client] Reconnection lost');
+          this.updateState({ room: { isConnected: false } });
+          this.attemptReconnect(); // 继续尝试
+        });
+        
+        conn.on('error', (err) => {
+          console.error('[Client] Reconnection error:', err);
+          this.attemptReconnect(); // 继续尝试
+        });
+        
       } catch (err) {
         console.error('[Client] Reconnect failed:', err);
         this.attemptReconnect(); // 继续尝试
@@ -894,10 +953,11 @@ export class PeerConnectionManager {
    */
   send(message: any) {
     const conn = this.connections.get('host');
-    if (conn) {
+    if (conn && conn.open) {
       conn.send(message);
     } else {
-      console.error('[Client] No connection to host');
+      // 静默失败，避免断线时大量错误日志
+      // console.log('[Client] Cannot send: connection not open');
     }
   }
 
