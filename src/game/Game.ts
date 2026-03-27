@@ -590,7 +590,7 @@ export class Game {
     const game = new Game();
     
     // 恢复玩家
-    state.players.forEach((p) => {
+    state.players.forEach((p: { id: string; name: string; isHost: boolean; isReady: boolean; avatar: string; hand: any[]; hasCalledUno: boolean }) => {
       const player = new Player({
         id: p.id,
         name: p.name,

@@ -14,12 +14,13 @@ export const Lobby: React.FC = () => {
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const { room, setRoomId: setStoreRoomId, setConnected, updatePlayers, setGameRunning, updateGameState, updateMyHand } = useGameStore();
 
   // 设置 peerManager 状态回调
   useEffect(() => {
-    peerManager.setStateCallback((state: any) => {
+    peerManager.setStateCallback((state: { room?: { roomId?: string; isHost?: boolean; isConnected?: boolean; players?: any[]; isGameRunning?: boolean }; gameState?: any; myHand?: any }) => {
       if (state.room) {
         if (state.room.roomId !== undefined) setStoreRoomId(state.room.roomId, state.room.isHost ?? false);
         if (state.room.isConnected !== undefined) setConnected(state.room.isConnected);
@@ -43,8 +44,8 @@ export const Lobby: React.FC = () => {
     try {
       const newRoomId = generateRoomId();
       await peerManager.initializeAsHost(newRoomId, playerName.trim(), playerAvatar);
-    } catch (err: any) {
-      setError(`创建失败：${err.message}`);
+    } catch (err) {
+      setError(`创建失败：${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setIsCreating(false);
     }
@@ -58,8 +59,8 @@ export const Lobby: React.FC = () => {
     try {
       const hostPeerId = `uno-${roomId.toUpperCase()}`;
       await peerManager.initializeAsClient(hostPeerId, playerName.trim(), roomId.toUpperCase(), playerAvatar);
-    } catch (err: any) {
-      setError(`加入失败：${err.message}`);
+    } catch (err) {
+      setError(`加入失败：${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setIsJoining(false);
     }
@@ -119,16 +120,16 @@ export const Lobby: React.FC = () => {
 
   const handleToggleReady = () => {
     // 切换准备状态
-    const newReady = !(room as any).myReady;
-    (room as any).myReady = newReady;
+    const newReady = !isReady;
+    setIsReady(newReady);
     // 通知房主（如果是客户端）
     if (!room.isHost) {
-      peerManager.send({ type: 'READY_CHANGE', timestamp: Date.now(), isReady: newReady });
+      peerManager.send({ type: 'READY_CHANGE', timestamp: new Date().getTime(), isReady: newReady });
     }
     // 更新 UI
     updatePlayers(room.players.map(p => ({
       ...p,
-      isReady: p.id === (room.isHost ? 'host' : peerManager.getMyPeerId()) ? newReady : (p as any).isReady
+      isReady: p.id === (room.isHost ? 'host' : peerManager.getMyPeerId()) ? newReady : p.isReady
     })));
   };
 
@@ -212,7 +213,7 @@ export const Lobby: React.FC = () => {
                   onClick={handleToggleReady}
                   style={{
                     padding: '0.75rem 1.5rem',
-                    background: (room as any).myReady !== false ? '#ef4444' : '#22c55e',
+                    background: isReady ? '#ef4444' : '#22c55e',
                     borderRadius: '0.5rem',
                     fontWeight: 'bold',
                     color: 'white',
@@ -223,7 +224,7 @@ export const Lobby: React.FC = () => {
                     marginBottom: '1rem'
                   }}
                 >
-                  {(room as any).myReady !== false ? '✋ 取消准备' : '✅ 准备就绪'}
+                  {isReady ? '✋ 取消准备' : '✅ 准备就绪'}
                 </button>
               )}
 

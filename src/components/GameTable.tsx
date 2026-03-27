@@ -71,7 +71,7 @@ function getCardColorCN(color: string): string {
   return m[color] || color;
 }
 
-function getCardTypeCN(card: any): string {
+function getCardTypeCN(card: { type: string; value?: number }): string {
   if (card.type === 'number') return String(card.value ?? '');
   const m: Record<string, string> = { skip: '⊘跳过', reverse: '⇄反转', draw_two: '+2', wild: '变色', wild_draw_four: '+4' };
   return m[card.type] || card.type;
@@ -512,7 +512,7 @@ export const GameTable: React.FC = () => {
 /**
  * 对手视角
  */
-const OpponentView: React.FC<{ player: any }> = ({ player }) => {
+const OpponentView: React.FC<{ player: { id: string; name: string; avatar: string; handCount: number; isCurrentPlayer: boolean; isHost: boolean; status: string } }> = ({ player }) => {
   const { room } = useGameStore();
   
   const handleKick = (e: React.MouseEvent) => {

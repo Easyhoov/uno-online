@@ -64,9 +64,9 @@ export class PeerConnectionManager {
   private playerNameForReconnect: string | null = null; // 保存玩家名称用于重连
   private roomIdForReconnect: string | null = null; // 保存房间 ID 用于重连
   private playerAvatarForReconnect: string | null = null; // 保存头像用于重连
-  private heartbeatInterval: any = null; // 心跳定时器 ID
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null; // 心跳定时器 ID
 
-  setStateCallback(callback: (state: any) => void) {
+  setStateCallback(callback: (state: { room?: { roomId?: string; isHost?: boolean; isConnected?: boolean; players?: any[]; isGameRunning?: boolean }; gameState?: any; myHand?: any }) => void) {
     this.onStateUpdate = callback;
   }
   
@@ -655,7 +655,7 @@ export class PeerConnectionManager {
   /**
    * 房主：处理游戏动作（来自客户端或房主自己）
    */
-  processGameAction(fromId: string, action: any) {
+  processGameAction(fromId: string, action: { type: string; playerId?: string; cardIndex?: number; declaredColor?: any; targetPlayerId?: string }) {
     if (!this.game) {
       console.error('[Host] No active game');
       return;
@@ -733,7 +733,7 @@ export class PeerConnectionManager {
   /**
    * 房主本地出牌（不走网络，直接处理）
    */
-  hostAction(action: any) {
+  hostAction(action: { type: string; playerId?: string; cardIndex?: number; declaredColor?: any; targetPlayerId?: string }) {
     if (!this.isHostMode || !this.game) return;
     this.processGameAction('host', action);
   }
@@ -965,7 +965,7 @@ export class PeerConnectionManager {
   /**
    * 客户端发送消息给房主
    */
-  send(message: any) {
+  send(message: { type: string; timestamp?: number; playerId?: string; action?: any; [key: string]: any }) {
     const conn = this.connections.get('host');
     if (conn && conn.open) {
       conn.send(message);
@@ -978,7 +978,7 @@ export class PeerConnectionManager {
   /**
    * 房主广播消息给所有客户端
    */
-  private broadcastToClients(message: any, excludePeerId?: string) {
+  private broadcastToClients(message: { type: string; timestamp?: number; playerId?: string; [key: string]: any }, excludePeerId?: string) {
     this.connections.forEach((conn, peerId) => {
       if (peerId !== excludePeerId) {
         conn.send(message);
