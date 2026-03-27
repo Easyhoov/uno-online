@@ -209,7 +209,7 @@ export const GameTable: React.FC = () => {
     if (room.isHost) {
       peerManager.hostAction(action);
     } else {
-      peerManager.send({ type: 'ACTION', timestamp: Date.now(), action });
+      peerManager.send({ type: 'ACTION', timestamp: new Date().getTime(), action });
     }
   };
 

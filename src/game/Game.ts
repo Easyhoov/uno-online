@@ -354,7 +354,7 @@ export class Game {
         this.nextTurn();
         break;
 
-      case CardType.WILD_DRAW_FOUR:
+      case CardType.WILD_DRAW_FOUR: {
         this.drawStack += 4;
         events.push({ type: 'DRAW_STACK_INCREASED', amount: this.drawStack });
         
@@ -368,6 +368,7 @@ export class Game {
         
         this.nextTurn();
         break;
+      }
 
       default:
         this.nextTurn();
@@ -565,11 +566,31 @@ export class Game {
    * 反序列化游戏状态（用于房主转移）
    */
   static deserialize(data: string): Game {
-    const state = JSON.parse(data);
+    const state = JSON.parse(data) as {
+      players: Array<{
+        id: string;
+        name: string;
+        isHost: boolean;
+        isReady: boolean;
+        avatar: string;
+        hand: any[];
+        hasCalledUno: boolean;
+      }>;
+      currentPlayerIndex: number;
+      direction: number;
+      drawStack: number;
+      wildColor: string | null;
+      isGameOver: boolean;
+      winnerId: string | null;
+      discardPile: any[];
+      pendingChallenge: any;
+      lastEvents: any[];
+      hasDrawnThisTurn: boolean;
+    };
     const game = new Game();
     
     // 恢复玩家
-    state.players.forEach((p: any) => {
+    state.players.forEach((p) => {
       const player = new Player({
         id: p.id,
         name: p.name,
@@ -578,8 +599,8 @@ export class Game {
         avatar: p.avatar
       });
       // 恢复手牌
-      (player as any).hand = p.hand;
-      (player as any).hasCalledUno = p.hasCalledUno;
+      (player as unknown as { hand: any[] }).hand = p.hand;
+      (player as unknown as { hasCalledUno: boolean }).hasCalledUno = p.hasCalledUno;
       game.players.push(player);
     });
     
