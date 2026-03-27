@@ -162,7 +162,10 @@ export const GameTable: React.FC = () => {
     if (gameState?.lastEvents?.length) {
       const newEntries = gameState.lastEvents.map(formatEvent).filter(Boolean);
       if (newEntries.length > 0) {
-        setEventLog(prev => [...prev.slice(-30), ...newEntries]); // 保留最近 30+ 条
+        setEventLog(prev => {
+          const combined = [...prev.slice(-30), ...newEntries];
+          return combined.slice(-50); // 保留最近 50 条
+        });
       }
     }
   }, [gameState?.lastEvents]);

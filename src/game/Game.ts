@@ -3,6 +3,7 @@ import { Deck } from './Deck';
 import { Player, generatePlayerId } from './Player';
 import { CardColor, CardType } from './enums';
 import type { Direction } from './enums';
+import type { GameEvent } from './Game';
 
 /**
  * 游戏动作类型
@@ -573,7 +574,7 @@ export class Game {
         isHost: boolean;
         isReady: boolean;
         avatar: string;
-        hand: any[];
+        hand: Card[];
         hasCalledUno: boolean;
       }>;
       currentPlayerIndex: number;
@@ -582,15 +583,15 @@ export class Game {
       wildColor: string | null;
       isGameOver: boolean;
       winnerId: string | null;
-      discardPile: any[];
-      pendingChallenge: any;
-      lastEvents: any[];
+      discardPile: Card[];
+      pendingChallenge: { challengerId: string; targetId: string; wildColor: string | null } | null;
+      lastEvents: GameEvent[];
       hasDrawnThisTurn: boolean;
     };
     const game = new Game();
     
     // 恢复玩家
-    state.players.forEach((p: { id: string; name: string; isHost: boolean; isReady: boolean; avatar: string; hand: any[]; hasCalledUno: boolean }) => {
+    state.players.forEach((p) => {
       const player = new Player({
         id: p.id,
         name: p.name,
@@ -599,7 +600,7 @@ export class Game {
         avatar: p.avatar
       });
       // 恢复手牌
-      (player as unknown as { hand: any[] }).hand = p.hand;
+      (player as unknown as { hand: Card[] }).hand = p.hand;
       (player as unknown as { hasCalledUno: boolean }).hasCalledUno = p.hasCalledUno;
       game.players.push(player);
     });
