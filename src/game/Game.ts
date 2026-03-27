@@ -80,6 +80,7 @@ export interface PublicGameState {
     handCount: number;
     isCurrentPlayer: boolean;
     isHost: boolean;
+    status: 'active' | 'disconnected' | 'spectator';
   }>;
   currentPlayerIndex: number;
   topCard: Card;

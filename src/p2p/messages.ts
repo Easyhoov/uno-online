@@ -25,7 +25,10 @@ export type MessageType =
   | 'RECONNECT_ACK'
   | 'GAME_STATE_SYNC'
   | 'RETURN_TO_LOBBY'
-  | 'READY_CHANGE';
+  | 'READY_CHANGE'
+  | 'SPECTATOR_JOIN'
+  | 'SPECTATOR_LEAVE'
+  | 'PLAYER_STATUS_CHANGE';
 
 /**
  * P2P 消息基础接口
@@ -227,6 +230,31 @@ export interface ReconnectAckMessage extends Message {
   gameState?: PublicGameState;
   myHand?: Card[];
   error?: string;
+}
+
+/**
+ * 玩家状态变更广播
+ */
+export interface PlayerStatusChangeMessage extends Message {
+  type: 'PLAYER_STATUS_CHANGE';
+  playerId: string;
+  status: 'active' | 'disconnected' | 'spectator';
+}
+
+/**
+ * 加入观战（断线玩家→房主）
+ */
+export interface SpectatorJoinMessage extends Message {
+  type: 'SPECTATOR_JOIN';
+  playerId: string;
+}
+
+/**
+ * 离开观战（观战玩家→房主）
+ */
+export interface SpectatorLeaveMessage extends Message {
+  type: 'SPECTATOR_LEAVE';
+  playerId: string;
 }
 
 /**

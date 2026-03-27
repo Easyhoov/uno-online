@@ -30,3 +30,8 @@ export type Direction = 1 | -1; // 1=顺时针，-1=逆时针
  * 玩家角色
  */
 export type PlayerRole = 'host' | 'client';
+
+/**
+ * 玩家状态
+ */
+export type PlayerStatus = 'active' | 'disconnected' | 'spectator';

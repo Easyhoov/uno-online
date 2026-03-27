@@ -14,6 +14,19 @@ export interface PlayerData {
 }
 
 /**
+ * 玩家公开信息（含状态）
+ */
+export interface PlayerPublicInfo {
+  id: string;
+  name: string;
+  avatar: string;
+  handCount: number;
+  isCurrentPlayer: boolean;
+  isHost: boolean;
+  status: 'active' | 'disconnected' | 'spectator';
+}
+
+/**
  * 玩家类
  */
 export class Player {
@@ -22,8 +35,10 @@ export class Player {
   public readonly isHost: boolean;
   public readonly avatar: string;
   public isReady: boolean;
+  public status: 'active' | 'disconnected' | 'spectator' = 'active';
   private hand: Card[] = [];
   public hasCalledUno: boolean = false;
+  public disconnectTime?: number; // 断线时间戳
 
   constructor(data: PlayerData) {
     this.id = data.id;
@@ -115,15 +130,48 @@ export class Player {
   /**
    * 玩家公开信息（用于状态同步）
    */
-  getPublicInfo(isCurrentPlayer: boolean) {
+  getPublicInfo(isCurrentPlayer: boolean): PlayerPublicInfo {
     return {
       id: this.id,
       name: this.name,
       avatar: this.avatar,
       handCount: this.hand.length,
       isCurrentPlayer,
-      isHost: this.isHost
+      isHost: this.isHost,
+      status: this.status
     };
+  }
+
+  /**
+   * 设置为断线状态
+   */
+  setDisconnected() {
+    this.status = 'disconnected';
+    this.disconnectTime = Date.now();
+  }
+
+  /**
+   * 设置为观战状态
+   */
+  setSpectator() {
+    this.status = 'spectator';
+  }
+
+  /**
+   * 恢复为活跃状态
+   */
+  setActive() {
+    this.status = 'active';
+    this.disconnectTime = undefined;
+  }
+
+  /**
+   * 检查是否可以被移除（断线超过指定时间）
+   */
+  canRemove(timeoutMs: number): boolean {
+    if (this.status === 'active') return false;
+    if (!this.disconnectTime) return false;
+    return Date.now() - this.disconnectTime > timeoutMs;
   }
 }
 

@@ -30,6 +30,10 @@ export class PeerConnectionManager {
   private playerLastHeartbeat: Map<string, number> = new Map();
   private playerReady: Map<string, boolean> = new Map(); // 玩家准备状态
   
+  // Spectator 模式配置
+  private readonly SPECTATOR_TIMEOUT_MS = 30000; // 30 秒后转为观战
+  private readonly REMOVE_TIMEOUT_MS = 300000; // 5 分钟后移除
+  
   // 速率限制：防止恶意高频请求
   private playerActionTimes: Map<string, number[]> = new Map(); // playerId -> 最近动作时间戳
   private readonly MAX_ACTIONS_PER_SECOND = 5; // 每秒最多 5 个动作
@@ -330,38 +334,42 @@ export class PeerConnectionManager {
       console.log('[Host] Player disconnected:', clientPeerId);
       this.connections.delete(clientPeerId);
       
-      // 断线处理：保留玩家状态 30 秒
+      // 断线处理：Spectator 模式
       if (this.game && !this.game.isGameOver) {
-        const hand = this.game.getPlayerHand(clientPeerId);
-        const name = this.playerNames.get(clientPeerId) || 'Player';
-        const avatar = this.playerAvatars.get(clientPeerId) || '😀';
-        
-        this.disconnectedPlayers.set(clientPeerId, {
-          name,
-          avatar,
-          hand: hand || [],
-          timeout: setTimeout(() => {
-            console.log('[Host] Player reconnection timeout:', clientPeerId);
-            this.disconnectedPlayers.delete(clientPeerId);
-            this.playerNames.delete(clientPeerId);
-            this.playerAvatars.delete(clientPeerId);
-            const players = this.buildPlayerList();
-            this.broadcastToClients({
-              type: 'PLAYER_LEFT',
-              timestamp: Date.now(),
-              playerId: clientPeerId,
-              players
-            });
-            this.updateState({ room: { players } });
-          }, 30000) // 30 秒超时
-        });
+        const player = this.game.players.find(p => p.id === clientPeerId);
+        if (player) {
+          // 标记为断线状态
+          player.setDisconnected();
+          
+          const name = this.playerNames.get(clientPeerId) || 'Player';
+          const avatar = this.playerAvatars.get(clientPeerId) || '😀';
+          
+          // 广播玩家断线（但保留在玩家列表中）
+          const players = this.buildPlayerList();
+          this.broadcastToClients({
+            type: 'PLAYER_JOINED', // 复用此消息类型更新状态
+            timestamp: Date.now(),
+            player: { id: clientPeerId, name, avatar, isHost: false },
+            players
+          });
+          this.updateState({ room: { players } });
+          
+          console.log(`[Host] Player ${clientPeerId} marked as disconnected, can spectate`);
+          
+          // 设置超时：30 秒后如果未重连，询问是否继续观战
+          this.disconnectedPlayers.set(clientPeerId, {
+            name,
+            avatar,
+            hand: player.getHand(),
+            timeout: setTimeout(() => {
+              this.handleSpectatorTimeout(clientPeerId);
+            }, this.SPECTATOR_TIMEOUT_MS)
+          });
+        }
       } else {
         this.playerNames.delete(clientPeerId);
         this.playerAvatars.delete(clientPeerId);
       }
-      
-      const players = this.buildPlayerList();
-      this.updateState({ room: { players } });
     });
   }
 
@@ -505,6 +513,66 @@ export class PeerConnectionManager {
     });
 
     console.log('[Host] Game started, players:', this.game.players.length);
+  }
+
+  /**
+   * 处理观战超时（断线 30 秒后）
+   */
+  private handleSpectatorTimeout(peerId: string) {
+    const player = this.game?.players.find(p => p.id === peerId);
+    if (!player) {
+      this.disconnectedPlayers.delete(peerId);
+      return;
+    }
+    
+    // 如果玩家仍然断线，转为观战状态
+    if (player.status === 'disconnected') {
+      player.setSpectator();
+      console.log(`[Host] Player ${peerId} converted to spectator`);
+      
+      // 广播状态更新
+      const players = this.buildPlayerList();
+      this.broadcastToClients({
+        type: 'PLAYER_JOINED',
+        timestamp: Date.now(),
+        player: { id: peerId, name: player.name, avatar: player.avatar, isHost: false },
+        players
+      });
+      
+      // 如果当前回合是这个玩家，跳过
+      if (this.game && this.game.players[this.game.currentPlayerIndex]?.id === peerId) {
+        console.log('[Host] Skipping disconnected spectator\'s turn');
+        // 注意：这里需要特殊处理，跳过观战玩家的回合
+      }
+    }
+  }
+
+  /**
+   * 移除观战玩家（断线超过 5 分钟）
+   */
+  private removeSpectator(peerId: string) {
+    if (!this.game) return;
+    
+    const playerIndex = this.game.players.findIndex(p => p.id === peerId);
+    if (playerIndex === -1) return;
+    
+    // 从游戏中移除玩家（但保留分数记录）
+    const player = this.game.players[playerIndex];
+    console.log(`[Host] Removing spectator ${peerId} from game`);
+    
+    // 广播玩家离开
+    this.game.players.splice(playerIndex, 1);
+    const players = this.buildPlayerList();
+    this.broadcastToClients({
+      type: 'PLAYER_LEFT',
+      timestamp: Date.now(),
+      playerId: peerId,
+      players
+    });
+    
+    this.disconnectedPlayers.delete(peerId);
+    this.playerNames.delete(peerId);
+    this.playerAvatars.delete(peerId);
   }
 
   /**
