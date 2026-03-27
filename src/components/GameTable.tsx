@@ -101,6 +101,7 @@ export const GameTable: React.FC = () => {
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [showLog, setShowLog] = useState(true);
   const [playingCards, setPlayingCards] = useState<Array<{ card: Card; id: string; fromX: number }>>([]);
+  const [animCounter, setAnimCounter] = useState(0); // 动画计数器，确保 key 唯一
   const logRef = useRef<HTMLDivElement>(null);
   const handRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -124,8 +125,9 @@ export const GameTable: React.FC = () => {
         const cardElement = handRefs.current.get(cardIndex);
         const fromX = cardElement ? cardElement.getBoundingClientRect().left : 0;
         
-        // 添加动画卡牌
-        const animId = `anim_${Date.now()}`;
+        // 添加动画卡牌（使用计数器确保 key 唯一）
+        const animId = `anim_${Date.now()}_${animCounter}`;
+        setAnimCounter(prev => prev + 1);
         setPlayingCards(prev => [...prev, { card: playEvent.card!, id: animId, fromX }]);
         
         // 动画结束后移除
@@ -134,7 +136,7 @@ export const GameTable: React.FC = () => {
         }, 600);
       }
     }
-  }, [gameState?.lastEvents]);
+  }, [gameState?.lastEvents, animCounter]);
 
   // 监听出牌事件，播放动画
   useEffect(() => {
@@ -159,15 +161,16 @@ export const GameTable: React.FC = () => {
       // 监听抽牌事件
       const drawEvent = gameState.lastEvents.find(e => e.type === 'CARD_DRAWN');
       if (drawEvent && drawEvent.playerId === myId) {
-        // 抽牌动画：从牌堆飞向手牌
-        const animId = `draw_anim_${Date.now()}`;
+        // 抽牌动画：从牌堆飞向手牌（使用计数器确保 key 唯一）
+        const animId = `draw_anim_${Date.now()}_${animCounter}`;
+        setAnimCounter(prev => prev + 1);
         setPlayingCards(prev => [...prev, { card: drawEvent.card || myHand![0], id: animId, fromX: -200 }]);
         setTimeout(() => {
           setPlayingCards(prev => prev.filter(c => c.id !== animId));
         }, 600);
       }
     }
-  }, [gameState?.lastEvents]);
+  }, [gameState?.lastEvents, animCounter]);
 
   // 监听 gameState 变化，更新事件日志
   useEffect(() => {
