@@ -17,6 +17,14 @@ const COLOR_MAP: Record<string, string> = {
   [CardColor.WILD]: 'linear-gradient(135deg, #e94560, #f5d300, #00c96e, #00a8d4)',
 };
 
+const COLOR_NAMES: Record<string, string> = {
+  [CardColor.RED]: '红色',
+  [CardColor.YELLOW]: '黄色',
+  [CardColor.GREEN]: '绿色',
+  [CardColor.BLUE]: '蓝色',
+  [CardColor.WILD]: '万能',
+};
+
 /**
  * 卡牌组件
  */
@@ -27,10 +35,28 @@ export const CardComponent: React.FC<CardComponentProps> = ({ card, isPlayable, 
 
   // 文字颜色：黄色牌用深色文字
   const textColor = card.color === CardColor.YELLOW ? '#1a1a2e' : 'white';
+  
+  // 构建可读的卡牌描述
+  const cardLabel = `${COLOR_NAMES[card.color] || ''} ${display}`;
+  const ariaLabel = isPlayable 
+    ? `出牌：${cardLabel}` 
+    : `不可出的牌：${cardLabel}`;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isPlayable && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onClick();
+    }
+  };
 
   return (
     <div
       onClick={isPlayable ? onClick : undefined}
+      onKeyDown={handleKeyDown}
+      tabIndex={isPlayable ? 0 : -1}
+      role="button"
+      aria-label={ariaLabel}
+      aria-disabled={!isPlayable}
       style={{
         width: '4.5rem',
         height: '7rem',

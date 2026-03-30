@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { Lobby } from './components/Lobby';
 import { GameTable } from './components/GameTable';
+import { Tutorial, useShowTutorial } from './components/Tutorial';
 import './App.css';
 
 function App() {
   const { room } = useGameStore();
   const [isLoading, setIsLoading] = useState(true);
+  const { shouldShow: showTutorial, markAsSeen } = useShowTutorial();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,16 +36,24 @@ function App() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-    }}>
-      {room.isConnected && room.isGameRunning ? (
-        <GameTable />
-      ) : (
-        <Lobby />
-      )}
-    </div>
+    <>
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+      }}>
+        {room.isConnected && room.isGameRunning ? (
+          <GameTable />
+        ) : (
+          <Lobby />
+        )}
+      </div>
+      
+      {/* 新手引导 */}
+      <Tutorial 
+        isOpen={showTutorial} 
+        onClose={markAsSeen} 
+      />
+    </>
   );
 }
 

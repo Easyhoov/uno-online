@@ -134,25 +134,29 @@ export const Lobby: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ width: '100%', maxWidth: '28rem' }}>
+    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} role="main" aria-label="游戏大厅">
+      {/* 跳过导航链接 */}
+      <a href="#main-content" className="skip-link">跳到主要内容</a>
+      
+      <div style={{ width: '100%', maxWidth: '28rem' }} id="main-content">
         {/* 标题 */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <h1 style={{ fontSize: '3rem', fontWeight: 'bold', color: 'white', marginBottom: '0.5rem' }}>🎴 UNO</h1>
           <p style={{ color: '#9ca3af' }}>在线联机版</p>
-        </div>
+        </header>
 
         {/* 主卡片 */}
-        <div style={{ background: '#16213e', borderRadius: '1rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', padding: '2rem' }}>
+        <section style={{ background: '#16213e', borderRadius: '1rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', padding: '2rem' }} aria-label="创建或加入房间">
           {room.roomId ? (
             /* 已在房间中 */
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center' }} role="region" aria-label="等待玩家">
               <div style={{ marginBottom: '1.5rem' }}>
                 <p style={{ color: '#9ca3af', marginBottom: '0.5rem' }}>房间号</p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '2.25rem', fontWeight: 'bold', color: '#f5d300', letterSpacing: '0.2em' }}>{room.roomId}</span>
+                  <span style={{ fontSize: '2.25rem', fontWeight: 'bold', color: '#f5d300', letterSpacing: '0.2em' }} aria-live="polite">{room.roomId}</span>
                   <button
                     onClick={copyRoomId}
+                    aria-label={copySuccess ? '已复制房间号' : '复制房间号'}
                     style={{ padding: '0.5rem 0.75rem', background: copySuccess ? '#22c55e' : '#00d4ff', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', transition: 'background 0.2s', fontSize: '1rem' }}
                     title="复制房间号"
                   >
@@ -161,15 +165,15 @@ export const Lobby: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem' }} role="status" aria-live="polite">
                 <p style={{ color: '#9ca3af', marginBottom: '1rem' }}>等待玩家加入... ({room.players.length}/4)</p>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <ul style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap', listStyle: 'none', padding: 0, margin: 0 }} role="list" aria-label="玩家列表">
                   {room.players.map((player, i) => {
                     const isReady = (player as any).isReady !== false;
                     
                     return (
-                      <div key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
-                        <span style={{ fontSize: '1.25rem' }}>{(player as any).avatar || '😀'}</span>
+                      <li key={i} style={{ padding: '0.5rem 1rem', background: '#1a1a2e', borderRadius: '0.5rem', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                        <span style={{ fontSize: '1.25rem' }} aria-hidden="true">{(player as any).avatar || '😀'}</span>
                         <span>{player.name} {player.isHost && '👑'}</span>
                         {/* 准备状态 */}
                         <span style={{ 
@@ -179,12 +183,13 @@ export const Lobby: React.FC = () => {
                           fontWeight: 'bold',
                           background: isReady ? 'rgba(34, 197, 94, 0.2)' : 'rgba(156, 163, 175, 0.2)',
                           color: isReady ? '#4ade80' : '#9ca3af'
-                        }}>
+                        }} aria-label={isReady ? '已准备' : '未准备'}>
                           {isReady ? '✅ 准备' : '⏳ 未准备'}
                         </span>
                         {room.isHost && !player.isHost && (
                           <button
                             onClick={() => handleKickPlayer(player.id, player.name)}
+                            aria-label={`踢出玩家 ${player.name}`}
                             style={{
                               marginLeft: '0.5rem',
                               padding: '0.2rem 0.5rem',
@@ -201,16 +206,17 @@ export const Lobby: React.FC = () => {
                             ✕
                           </button>
                         )}
-                      </div>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
 
               {/* 准备按钮（非房主） */}
               {!room.isHost && (
                 <button
                   onClick={handleToggleReady}
+                  aria-pressed={isReady}
                   style={{
                     padding: '0.75rem 1.5rem',
                     background: isReady ? '#ef4444' : '#22c55e',
@@ -232,6 +238,7 @@ export const Lobby: React.FC = () => {
                 <button
                   onClick={handleStartGame}
                   disabled={room.players.length < 2}
+                  aria-disabled={room.players.length < 2}
                   style={{
                     padding: '0.75rem 1.5rem',
                     background: room.players.length >= 2 ? '#e94560' : '#4b5563',
@@ -248,36 +255,42 @@ export const Lobby: React.FC = () => {
                 </button>
               )}
               {!room.isHost && (
-                <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>等待房主开始游戏...</p>
+                <p style={{ color: '#9ca3af', fontSize: '0.875rem' }} role="status">等待房主开始游戏...</p>
               )}
             </div>
           ) : (
             /* 创建/加入 */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }} onSubmit={(e) => { e.preventDefault(); handleJoinRoom(); }} aria-label="创建或加入房间表单">
               {/* 昵称和头像 */}
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 {/* 头像选择 */}
                 <AvatarPicker selectedAvatar={playerAvatar} onSelect={setPlayerAvatar} />
                 
                 {/* 昵称输入 */}
-                <input
-                  type="text"
-                  placeholder="输入你的昵称"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem 1rem', background: '#1a1a2e',
-                    borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
-                    outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
-                  }}
-                  maxLength={20}
-                />
+                <label style={{ flex: 1, display: 'flex' }}>
+                  <span className="sr-only">昵称</span>
+                  <input
+                    type="text"
+                    placeholder="输入你的昵称"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    aria-label="输入你的昵称"
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem 1rem', background: '#1a1a2e',
+                      borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
+                      outline: 'none', fontSize: '1rem', boxSizing: 'border-box'
+                    }}
+                    maxLength={20}
+                  />
+                </label>
               </div>
 
               <button
+                type="button"
                 onClick={handleCreateRoom}
                 disabled={isCreating}
+                aria-busy={isCreating}
                 style={{
                   padding: '1rem', background: isCreating ? '#9ca3af' : '#e94560',
                   borderRadius: '0.5rem', fontWeight: 'bold', color: 'white',
@@ -288,7 +301,7 @@ export const Lobby: React.FC = () => {
               </button>
 
               {/* 分隔线 */}
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} role="separator" aria-hidden="true">
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
                   <div style={{ width: '100%', borderTop: '1px solid #4b5563' }}></div>
                 </div>
@@ -297,22 +310,27 @@ export const Lobby: React.FC = () => {
                 </div>
               </div>
 
-              <input
-                type="text"
-                placeholder="输入房间号"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%', padding: '0.75rem 1rem', background: '#1a1a2e',
-                  borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
-                  outline: 'none', fontSize: '1rem', letterSpacing: '0.15em',
-                  textTransform: 'uppercase', boxSizing: 'border-box'
-                }}
-                maxLength={6}
-              />
+              <label style={{ display: 'flex' }}>
+                <span className="sr-only">房间号</span>
+                <input
+                  type="text"
+                  placeholder="输入房间号"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                  aria-label="输入房间号"
+                  style={{
+                    width: '100%', padding: '0.75rem 1rem', background: '#1a1a2e',
+                    borderRadius: '0.5rem', color: 'white', border: '1px solid #374151',
+                    outline: 'none', fontSize: '1rem', letterSpacing: '0.15em',
+                    textTransform: 'uppercase', boxSizing: 'border-box'
+                  }}
+                  maxLength={6}
+                />
+              </label>
               <button
-                onClick={handleJoinRoom}
+                type="submit"
                 disabled={isJoining}
+                aria-busy={isJoining}
                 style={{
                   padding: '0.75rem 1.5rem', background: isJoining ? '#9ca3af' : '#00d4ff',
                   borderRadius: '0.5rem', fontWeight: 'bold', color: 'white',
@@ -323,18 +341,18 @@ export const Lobby: React.FC = () => {
               </button>
 
               {error && (
-                <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '0.5rem', color: '#f87171', fontSize: '0.875rem' }}>
+                <div role="alert" style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '0.5rem', color: '#f87171', fontSize: '0.875rem' }}>
                   ⚠️ {error}
                 </div>
               )}
-            </div>
+            </form>
           )}
-        </div>
+        </section>
 
-        <p style={{ textAlign: 'center', color: '#6b7280', fontSize: '0.875rem', marginTop: '1.5rem' }}>
-          无需注册 · 即开即玩 · 支持 2-4 人
-        </p>
+        <footer style={{ textAlign: 'center', color: '#6b7280', fontSize: '0.875rem', marginTop: '1.5rem' }}>
+          <p>无需注册 · 即开即玩 · 支持 2-4 人</p>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 };

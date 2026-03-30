@@ -107,6 +107,9 @@ export const GameTable: React.FC = () => {
   
   // 提前声明 myId，避免在 useEffect 中访问未声明的变量
   const myId = peerManager.getMyPeerId();
+  
+  // 选中的卡牌索引（用于键盘导航）
+  const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
 
   // 注入 CSS 动画
   useEffect(() => {
@@ -117,6 +120,89 @@ export const GameTable: React.FC = () => {
       document.head.removeChild(style);
     };
   }, []);
+
+  // 键盘快捷键支持
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!gameState || showColorPicker) return;
+      
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      const isMyTurnNow = currentPlayer?.id === myId;
+      
+      switch (e.key.toLowerCase()) {
+        case 'arrowleft':
+          // 选择上一张牌
+          e.preventDefault();
+          if (myHand && myHand.length > 0) {
+            setSelectedCardIndex(prev => 
+              prev === null ? 0 : Math.max(0, prev - 1)
+            );
+          }
+          break;
+          
+        case 'arrowright':
+          // 选择下一张牌
+          e.preventDefault();
+          if (myHand && myHand.length > 0) {
+            setSelectedCardIndex(prev => 
+              prev === null ? 0 : Math.min(myHand.length - 1, prev + 1)
+            );
+          }
+          break;
+          
+        case 'enter':
+        case ' ':
+          // 出牌
+          e.preventDefault();
+          if (isMyTurnNow && selectedCardIndex !== null && myHand) {
+            const card = myHand[selectedCardIndex];
+            if (card && isValidPlay(card, gameState.topCard, gameState.wildColor, gameState.drawStack)) {
+              handleCardClick(selectedCardIndex);
+            }
+          }
+          break;
+          
+        case 'd':
+          // 抽牌
+          e.preventDefault();
+          if (isMyTurnNow) {
+            handleDrawCard();
+          }
+          break;
+          
+        case 'h':
+          // 喊 UNO
+          e.preventDefault();
+          handleCallUno();
+          break;
+          
+        case 'p':
+          // 跳过
+          e.preventDefault();
+          if (isMyTurnNow && gameState.hasDrawnThisTurn) {
+            handlePass();
+          }
+          break;
+          
+        case 'c':
+          // 挑战 +4
+          e.preventDefault();
+          if (gameState.canChallenge) {
+            handleChallenge();
+          }
+          break;
+          
+        case 'escape':
+          // 取消选择
+          e.preventDefault();
+          setSelectedCardIndex(null);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameState, myHand, selectedCardIndex, showColorPicker, myId]);
 
   // 监听出牌事件，播放动画
   useEffect(() => {
