@@ -198,11 +198,18 @@ export class PeerConnectionManager {
         conn.on('close', () => {
           console.log('[Client] Disconnected from host');
           this.updateState({ room: { isConnected: false } });
-          this.stopClientHeartbeat(); // 停止心跳
-          this.addError('NETWORK_ERROR', '与房主失去连接，尝试重新连接...');
+          this.stopClientHeartbeat();
           
-          // 自动尝试重连
-          this.attemptReconnect();
+          // 判断是普通断线还是房主转移
+          if (this.isHostMode) {
+            // 房主断线：触发转移
+            console.log('[Client] Host disconnected, triggering host transfer...');
+            this.handleHostDisconnect();
+          } else {
+            // 客户端断线：尝试重连
+            this.addError('NETWORK_ERROR', '与房主失去连接，尝试重新连接...');
+            this.attemptReconnect();
+          }
         });
 
         conn.on('error', (err) => {
@@ -772,40 +779,60 @@ export class PeerConnectionManager {
   /**
    * 房主转移（给下一个玩家）
    * 
-   * ⚠️ 注意：当前实现是简化的版本
-   * 完整实现需要：
-   * 1. 新房主使用新房间 ID 重新初始化 Peer
-   * 2. 所有客户端收到通知后重新连接到新房主
-   * 3. 同步游戏状态
-   * 
-   * 当前版本：游戏继续，但客户端仍然连接到旧房主（已断开）
-   * 建议：房主主动离开前手动转移，或使用专用服务器
+   * 完整实现：
+   * 1. 选择新房主（第一个客户端）
+   * 2. 生成新房间 ID
+   * 3. 新房主重新初始化 Peer 为房主模式
+   * 4. 所有客户端收到通知后重新连接到新房主
+   * 5. 同步游戏状态
    */
-  transferHost() {
-    if (!this.isHostMode || this.connections.size === 0) return;
+  transferHost(reason: string = '房主离开') {
+    if (!this.isHostMode || this.connections.size === 0) {
+      console.log('[Host] Cannot transfer: not host or no clients');
+      return;
+    }
     
     // 选择第一个客户端作为新房主
-    const [newHostId] = this.connections.keys();
-    const newHostName = this.playerNames.get(newHostId) || 'Player';
+    const [newHostPeerId] = this.connections.keys();
+    const newHostName = this.playerNames.get(newHostPeerId) || 'Player';
+    const newHostAvatar = this.playerAvatars.get(newHostPeerId) || '😀';
     
-    console.log('[Host] Transferring host to:', newHostId, newHostName);
+    // 生成新房间 ID
+    const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const newHostFullPeerId = `uno-${newRoomId}`;
     
-    // 序列化游戏状态（用于新房主恢复）
+    console.log('[Host] Transferring host to:', newHostPeerId, newHostName, 'New Room ID:', newRoomId);
+    
+    // 序列化游戏状态
     const serializedGame = this.game ? this.game.serialize() : null;
     
-    // 通知所有客户端
-    this.broadcastToClients({
-      type: 'HOST_TRANSFER',
+    // 构建转移消息
+    const transferMessage = {
+      type: 'HOST_TRANSFER' as const,
       timestamp: Date.now(),
-      newHostId,
+      newHostId: newHostPeerId,
       newHostName,
+      newHostAvatar,
+      newRoomId,
+      newHostFullPeerId,
       serializedGame,
-      // 传递新房主的 Peer ID（客户端需要重新连接）
-      newHostPeerId: newHostId
-    });
-
-    // 清理当前房主状态
-    this.disconnect();
+      reason
+    };
+    
+    // 先通知新房主（特殊处理）
+    const newHostConn = this.connections.get(newHostPeerId);
+    if (newHostConn) {
+      newHostConn.send(transferMessage);
+    }
+    
+    // 通知其他客户端
+    this.broadcastToClients(transferMessage, newHostPeerId);
+    
+    // 延迟断开，给新房主时间初始化
+    setTimeout(() => {
+      console.log('[Host] Disconnecting old host...');
+      this.disconnect();
+    }, 2000);
   }
 
   // ============================================================
@@ -898,39 +925,86 @@ export class PeerConnectionManager {
 
       case 'HOST_TRANSFER':
         const transferMsg: any = data;
-        alert(`房主已转移给 ${transferMsg.newHostName}`);
-        if (transferMsg.newHostId === this.myPeerId) {
-          alert('你现在是新房主！');
-          // 新房主接管游戏状态
-          this.isHostMode = true;
-          this.myPeerId = 'host';
+        const isNewHost = transferMsg.newHostId === this.myPeerId;
+        
+        console.log('[Client] Host transfer notification:', transferMsg);
+        
+        if (isNewHost) {
+          // ============ 新房主接管 ============
+          console.log('[New Host] Taking over as host, room ID:', transferMsg.newRoomId);
           
-          // 重建玩家名称和头像映射
-          this.playerNames.clear();
-          this.playerAvatars.clear();
-          
-          // 恢复游戏状态
-          if (transferMsg.serializedGame) {
-            this.game = Game.deserialize(transferMsg.serializedGame);
-            this.playerNames.set('host', this.game.players.find(p => p.id === 'host')?.name || 'Host');
-            this.playerAvatars.set('host', this.game.players.find(p => p.id === 'host')?.avatar || '😀');
-            
-            // 更新 UI 状态
-            const gameState = this.game.getPublicState();
-            const hostHand = this.game.getPlayerHand('host');
-            this.updateState({
-              room: { isGameRunning: true, isHost: true },
-              gameState,
-              myHand: hostHand
-            });
-            
-            console.log('[New Host] Game restored successfully');
+          // 断开旧连接
+          const oldConn = this.connections.get('host');
+          if (oldConn) {
+            oldConn.close();
           }
+          this.connections.clear();
           
-          // 重要：新房主需要重新初始化 Peer 来监听其他客户端
-          // 注意：这是一个简化实现，完整实现需要所有客户端重新连接到新房主
-          console.log('[New Host] Taking over game, connections:', this.connections.size);
-          console.log('[New Host] Note: Clients need to reconnect to new host for full functionality');
+          // 重新初始化为房主模式
+          this.initializeAsHost(
+            transferMsg.newRoomId,
+            transferMsg.newHostName,
+            transferMsg.newHostAvatar || '😀'
+          ).then(() => {
+            console.log('[New Host] Initialized as host successfully');
+            
+            // 恢复游戏状态
+            if (transferMsg.serializedGame) {
+              this.game = Game.deserialize(transferMsg.serializedGame);
+              
+              // 更新玩家映射（从序列化的游戏中恢复）
+              this.playerNames.clear();
+              this.playerAvatars.clear();
+              this.playerNames.set('host', transferMsg.newHostName);
+              this.playerAvatars.set('host', transferMsg.newHostAvatar || '😀');
+              
+              // 更新 UI 状态
+              const gameState = this.game!.getPublicState();
+              const hostHand = this.game!.getPlayerHand('host');
+              this.updateState({
+                room: { 
+                  roomId: transferMsg.newRoomId,
+                  isHost: true, 
+                  isConnected: true,
+                  isGameRunning: true,
+                  players: this.buildPlayerList()
+                },
+                gameState,
+                myHand: hostHand
+              });
+              
+              console.log('[New Host] Game restored, waiting for clients to reconnect...');
+            }
+          }).catch((err) => {
+            console.error('[New Host] Failed to initialize:', err);
+            this.addError('HOST_TRANSFER_FAILED', '接管房主失败');
+          });
+        } else {
+          // ============ 其他客户端重连到新房主 ============
+          console.log('[Client] Reconnecting to new host:', transferMsg.newHostName);
+          
+          // 断开旧连接
+          const oldConn = this.connections.get('host');
+          if (oldConn) {
+            oldConn.close();
+          }
+          this.connections.clear();
+          
+          // 延迟后连接到新房主
+          setTimeout(async () => {
+            try {
+              await this.initializeAsClient(
+                transferMsg.newHostFullPeerId,
+                this.playerNameForReconnect || 'Player',
+                transferMsg.newRoomId,
+                this.playerAvatarForReconnect || '😀'
+              );
+              console.log('[Client] Reconnected to new host successfully');
+            } catch (err) {
+              console.error('[Client] Failed to reconnect to new host:', err);
+              this.addError('HOST_TRANSFER_FAILED', '无法连接到新房主');
+            }
+          }, 1000);
         }
         break;
 
@@ -1007,6 +1081,33 @@ export class PeerConnectionManager {
       gameState: null,
       myHand: null
     });
+  }
+
+  /**
+   * 处理房主断线（客户端触发）
+   * 
+   * ⚠️ 注意：由于 P2P 星型架构限制，客户端之间没有直接连接
+   * 房主被动断线时无法触发转移，只能提示用户
+   * 
+   * 解决方案：
+   * 1. 房主主动离开时使用 transferHost()
+   * 2. 房主被动断线时，客户端提示游戏结束
+   */
+  private handleHostDisconnect() {
+    if (this.isHostMode) {
+      console.error('[Client] handleHostDisconnect called in host mode');
+      return;
+    }
+    
+    console.log('[Client] Host disconnected');
+    
+    // 提示用户
+    this.addError('HOST_DISCONNECTED', '房主已断开连接');
+    
+    setTimeout(() => {
+      alert('⚠️ 房主已断开连接\n\n游戏无法继续。\n\n建议：\n1. 让原房主重新创建房间\n2. 或者让其他玩家创建新房间');
+      this.disconnect();
+    }, 500);
   }
 
   /**

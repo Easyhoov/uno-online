@@ -286,6 +286,11 @@ export const GameTable: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>🎴 UNO</span>
             <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>房间 {room.roomId}</span>
+            {room.isHost && (
+              <span style={{ padding: '0.1rem 0.4rem', background: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', borderRadius: '0.5rem', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                👑 房主
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {isMyTurnNow && (
@@ -298,6 +303,30 @@ export const GameTable: React.FC = () => {
               <span style={{ padding: '0.2rem 0.6rem', background: 'rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '1rem', fontSize: '0.8rem', fontWeight: 'bold' }}>
                 累积 +{gameState.drawStack}
               </span>
+            )}
+            {/* 房主离开按钮 */}
+            {room.isHost && (
+              <button
+                onClick={() => {
+                  if (confirm('房主离开将转移给其他玩家，确定吗？')) {
+                    peerManager.transferHost('房主主动离开');
+                  }
+                }}
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: '#f87171',
+                  borderRadius: '0.5rem',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginLeft: '0.5rem'
+                }}
+                title="转移房主给其他玩家"
+              >
+                🚪 离开并转移
+              </button>
             )}
           </div>
         </div>
