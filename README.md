@@ -126,6 +126,14 @@ Host (Room Creator)              Clients (Other Players)
 
 MIT
 
+## 📋 Changelog
+
+### v1.1.0 - 2026-03-30
+- ✨ Added host transfer functionality - game can continue if host disconnects
+- 🔧 Optimized peer connection management with better reconnection logic
+- 🧪 Added comprehensive test suite for host transfer scenarios
+- 🎨 Improved GameTable UI with better player state display
+
 ## 🤝 Contributing
 
 PRs welcome! Feel free to open issues for bugs or feature requests.
