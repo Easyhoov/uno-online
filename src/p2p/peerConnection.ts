@@ -64,7 +64,8 @@ export class PeerConnectionManager {
   private playerNameForReconnect: string | null = null; // 保存玩家名称用于重连
   private roomIdForReconnect: string | null = null; // 保存房间 ID 用于重连
   private playerAvatarForReconnect: string | null = null; // 保存头像用于重连
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null; // 心跳定时器 ID
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null; // 客户端心跳定时器 ID
+  private hostHeartbeatInterval: ReturnType<typeof setInterval> | null = null; // 房主心跳检测定时器 ID
 
   setStateCallback(callback: (state: { room?: { roomId?: string; isHost?: boolean; isConnected?: boolean; players?: any[]; isGameRunning?: boolean }; gameState?: any; myHand?: any }) => void) {
     this.onStateUpdate = callback;
@@ -116,7 +117,7 @@ export class PeerConnectionManager {
         });
         
         // 启动心跳检测（每 5 秒）
-        setInterval(() => {
+        this.hostHeartbeatInterval = setInterval(() => {
           if (!this.isHostMode) return;
           const now = Date.now();
           const timeout = 15000;
@@ -464,6 +465,20 @@ export class PeerConnectionManager {
 
     switch (data.type) {
       case 'ACTION':
+        // 输入验证：防止恶意数据
+        if (!this.validateAction((data as any).action)) {
+          console.log('[Host] Invalid action from:', fromPeerId);
+          const conn = this.connections.get(fromPeerId);
+          if (conn) {
+            conn.send({
+              type: 'ERROR',
+              timestamp: Date.now(),
+              code: 'INVALID_ACTION',
+              message: '发送了无效的游戏动作'
+            });
+          }
+          break;
+        }
         this.processGameAction(fromPeerId, (data as any).action);
         break;
       
@@ -639,6 +654,33 @@ export class PeerConnectionManager {
     this.disconnectedPlayers.delete(peerId);
     this.playerNames.delete(peerId);
     this.playerAvatars.delete(peerId);
+  }
+
+  /**
+   * 验证游戏动作数据有效性（防止恶意输入）
+   */
+  private validateAction(action: any): boolean {
+    if (!action || typeof action !== 'object') return false;
+    
+    const validTypes = ['PLAY_CARD', 'DRAW_CARD', 'PASS', 'CALL_UNO', 'CHALLENGE_WILD_FOUR', 'SELECT_COLOR'];
+    if (!validTypes.includes(action.type)) return false;
+    
+    // 验证 cardIndex 范围
+    if (action.cardIndex !== undefined) {
+      if (typeof action.cardIndex !== 'number' || action.cardIndex < 0 || action.cardIndex > 108) {
+        return false;
+      }
+    }
+    
+    // 验证 declaredColor
+    if (action.declaredColor !== undefined) {
+      const validColors = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'WILD'];
+      if (!validColors.includes(action.declaredColor)) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   /**
@@ -1114,6 +1156,20 @@ export class PeerConnectionManager {
    * 断开连接
    */
   disconnect() {
+    // 清理心跳定时器
+    if (this.hostHeartbeatInterval) {
+      clearInterval(this.hostHeartbeatInterval);
+      this.hostHeartbeatInterval = null;
+    }
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
+    // 清理断线玩家超时定时器
+    this.disconnectedPlayers.forEach(data => clearTimeout(data.timeout));
+    this.disconnectedPlayers.clear();
+    
     this.connections.forEach(conn => conn.close());
     this.connections.clear();
     this.peer?.destroy();
@@ -1122,6 +1178,8 @@ export class PeerConnectionManager {
     this.myPeerId = null;
     this.game = null;
     this.playerNames.clear();
+    this.playerAvatars.clear();
+    this.playerActionTimes.clear();
     this.updateState({ room: { isConnected: false, isGameRunning: false } });
   }
 

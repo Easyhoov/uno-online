@@ -468,6 +468,14 @@ export class Game {
   private nextTurn() {
     this.hasDrawnThisTurn = false;
     
+    // 检查是否有活跃玩家
+    const activePlayers = this.players.filter(p => p.status !== 'spectator');
+    if (activePlayers.length === 0) {
+      console.error('[Game] No active players, ending game');
+      this.isGameOver = true;
+      return;
+    }
+    
     // 跳过 spectator 玩家，找到下一个活跃玩家
     let attempts = 0;
     do {
@@ -479,9 +487,9 @@ export class Game {
       
       // 防止无限循环（所有玩家都是 spectator）
       if (attempts >= this.players.length) {
-        console.warn('[Game] All players are spectators, resetting to first player');
-        this.currentPlayerIndex = 0;
-        break;
+        console.warn('[Game] No active player found after full cycle');
+        this.isGameOver = true;
+        return;
       }
     } while (this.players[this.currentPlayerIndex].status === 'spectator');
   }
