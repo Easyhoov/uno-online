@@ -60,9 +60,11 @@ interface GameStore {
   dismissError: (index: number) => void;
 
   // 本地状态
+  myPeerId: string | null;
   selectedCardIndex: number | null;
   showColorPicker: boolean;
   setSelectedCardIndex: (index: number | null) => void;
+  setMyPeerId: (id: string | null) => void;
   setShowColorPicker: (show: boolean) => void;
 }
 
@@ -70,15 +72,14 @@ interface GameStore {
  * 辅助 Hook：检查是否是我的回合（自动派生）
  */
 export const useIsMyTurn = () => {
-  const { gameState, room } = useGameStore();
+  const { gameState, room, myPeerId } = useGameStore();
   
   if (!gameState || !room.roomId) return false;
   
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   if (!currentPlayer) return false;
   
-  // 根据当前玩家 ID 判断是否是我的回合
-  const myId = room.isHost ? 'host' : room.players.find(p => !p.isHost)?.id;
+  const myId = room.isHost ? 'host' : myPeerId;
   return currentPlayer.id === myId;
 };
 
@@ -193,8 +194,13 @@ export const useGameStore = create<GameStore>((set) => ({
   },
 
   // 本地状态
+  myPeerId: null,
   selectedCardIndex: null,
   showColorPicker: false,
+
+  setMyPeerId: (id) => {
+    set({ myPeerId: id });
+  },
 
   setSelectedCardIndex: (index) => {
     set({ selectedCardIndex: index });

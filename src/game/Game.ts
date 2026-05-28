@@ -529,6 +529,36 @@ export class Game {
     return player ? player.getHand() : null;
   }
 
+  /**
+   * 移除玩家（安全方式，维护 currentPlayerIndex）
+   */
+  removePlayer(playerId: string): boolean {
+    const index = this.players.findIndex(p => p.id === playerId);
+    if (index === -1) return false;
+    
+    this.players.splice(index, 1);
+    
+    // 调整 currentPlayerIndex
+    if (this.players.length === 0) {
+      this.isGameOver = true;
+    } else if (index < this.currentPlayerIndex) {
+      this.currentPlayerIndex--;
+    } else if (index === this.currentPlayerIndex) {
+      // 移除的是当前玩家，保持索引（指向下一个）
+      if (this.currentPlayerIndex >= this.players.length) {
+        this.currentPlayerIndex = 0;
+      }
+    }
+    
+    // 清理 pendingChallenge 指向该玩家的情况
+    if (this.pendingChallenge && 
+        (this.pendingChallenge.challengerId === playerId || this.pendingChallenge.targetId === playerId)) {
+      this.pendingChallenge = null;
+    }
+    
+    return true;
+  }
+
   reset() {
     this.players = [];
     this.deck = new Deck();

@@ -112,6 +112,7 @@ export class PeerConnectionManager {
         this.myPeerId = id;
         this.playerNames.set('host', this.hostName);
         this.playerAvatars.set('host', this.hostAvatar);
+        useGameStore.getState().setMyPeerId('host');
         this.updateState({
           room: { roomId, isHost: true, isConnected: true, players: [{ id: 'host', name: this.hostName, avatar: this.hostAvatar, isHost: true, isReady: true }] }
         });
@@ -185,6 +186,9 @@ export class PeerConnectionManager {
           this.updateState({
             room: { roomId, isHost: false, isConnected: true }
           });
+          
+          // 设置客户端 peerId 到 store
+          useGameStore.getState().setMyPeerId(myId);
           
           // 启动客户端心跳
           this.startClientHeartbeat();
@@ -634,15 +638,9 @@ export class PeerConnectionManager {
   private removeSpectator(peerId: string) {
     if (!this.game) return;
     
-    const playerIndex = this.game.players.findIndex(p => p.id === peerId);
-    if (playerIndex === -1) return;
-    
     // 从游戏中移除玩家（但保留分数记录）
-    const player = this.game.players[playerIndex];
     console.log(`[Host] Removing spectator ${peerId} from game`);
-    
-    // 广播玩家离开
-    this.game.players.splice(playerIndex, 1);
+    this.game.removePlayer(peerId);
     const players = this.buildPlayerList();
     this.broadcastToClients({
       type: 'PLAYER_LEFT',
@@ -674,7 +672,7 @@ export class PeerConnectionManager {
     
     // 验证 declaredColor
     if (action.declaredColor !== undefined) {
-      const validColors = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'WILD'];
+      const validColors = ['RED', 'BLUE', 'GREEN', 'YELLOW'];
       if (!validColors.includes(action.declaredColor)) {
         return false;
       }
@@ -686,13 +684,13 @@ export class PeerConnectionManager {
   /**
    * 速率限制检查
    */
-  private checkRateLimit(playerId: string): boolean {
+  private checkRateLimit(playerId: string, maxPerSecond: number = this.MAX_ACTIONS_PER_SECOND): boolean {
     const now = Date.now();
     const times = this.playerActionTimes.get(playerId) || [];
     // 移除 1 秒前的记录
     const recentTimes = times.filter(t => now - t < 1000);
     
-    if (recentTimes.length >= this.MAX_ACTIONS_PER_SECOND) {
+    if (recentTimes.length >= maxPerSecond) {
       return false; // 超过限制
     }
     
@@ -710,8 +708,9 @@ export class PeerConnectionManager {
       return;
     }
 
-    // 速率限制检查（房主自己 exempt）
-    if (fromId !== 'host' && !this.checkRateLimit(fromId)) {
+    // 速率限制检查（房主也受限，上限更高）
+    const limit = fromId === 'host' ? this.MAX_ACTIONS_PER_SECOND * 2 : this.MAX_ACTIONS_PER_SECOND;
+    if (!this.checkRateLimit(fromId, limit)) {
       console.log('[Host] Rate limit exceeded for:', fromId);
       const conn = this.connections.get(fromId);
       if (conn) {
@@ -801,8 +800,8 @@ export class PeerConnectionManager {
     }
 
     // 清理玩家数据
-    this.disconnectedPlayers.delete(targetPlayerId);
     clearTimeout(this.disconnectedPlayers.get(targetPlayerId)?.timeout);
+    this.disconnectedPlayers.delete(targetPlayerId);
     this.playerNames.delete(targetPlayerId);
     this.playerAvatars.delete(targetPlayerId);
     
